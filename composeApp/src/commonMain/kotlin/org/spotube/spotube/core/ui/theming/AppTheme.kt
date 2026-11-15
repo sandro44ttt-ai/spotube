@@ -247,7 +247,7 @@ private fun spotifyMillenniumComponents(
         foreground = text,
         shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
         contentPadding = PaddingValues(0.dp, 0.dp, 8.dp, 0.dp),
-        itemSpacing = 0f,
+        itemSpacing = 0.dp,
         minimumHeight = 62.dp,
         borderColor = border,
         borderWidth = 0.5.dp,
@@ -297,7 +297,7 @@ private fun spotifyMillenniumComponents(
         innerGlowInset = 0.dp,
         innerGlowTop = 0.dp,
         alpha = 1f,
-        motion = org.spotube.millennium.composables.MillenniumButtonMotion.Default,
+        motion = org.spotube.millennium.composables.MillenniumButtonMotion(),
         innerGlowFollowsShape = true,
         bottomRimColor = Color.Transparent
     )
@@ -396,7 +396,7 @@ private fun spotifyMillenniumComponents(
         orbColor = Color.Transparent,
         orbStrength = 0f,
         alpha = 1f,
-        motion = org.spotube.millennium.composables.MillenniumButtonMotion.Default
+        motion = org.spotube.millennium.composables.MillenniumButtonMotion()
     )
     val iconBtnHover = iconBtnDefault.copy(
         background = Brush.verticalGradient(0f to highlight, 1f to highlight)
