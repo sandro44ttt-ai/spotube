@@ -1,6 +1,6 @@
 name: Debug APK Build
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       branch:
