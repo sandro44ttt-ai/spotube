@@ -370,6 +370,7 @@ kotlin {
 android {
     namespace = "org.spotube.spotube"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdkMinor = 0
 
     defaultConfig {
         applicationId = bundleId
