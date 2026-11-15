@@ -38,7 +38,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
 
 import org.spotube.spotube.core.ui.theming.AppTheme
 import com.composeunstyled.Text
@@ -141,7 +143,10 @@ internal fun FloatingPlayerContent(
             .fillMaxWidth()
             .height(FloatingPlayerContentHeight)
             .millenniumSurface(
-                background = MillenniumTheme.colors.background, // solid background matching bottom nav
+                background = Brush.verticalGradient(
+                    0f to MillenniumTheme.colors.background,
+                    1f to MillenniumTheme.colors.background
+                ), // solid background matching bottom nav
                 shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
                 borderColor = MillenniumTheme.colors.border,
                 borderWidth = 0.5.dp,

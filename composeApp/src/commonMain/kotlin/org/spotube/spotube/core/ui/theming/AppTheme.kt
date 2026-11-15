@@ -27,6 +27,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -60,8 +61,8 @@ import org.spotube.millennium.theme.MillenniumPalette
 import org.spotube.millennium.theme.MillenniumTheme
 import org.spotube.millennium.theme.MillenniumThemeComponents
 import org.spotube.millennium.theme.MillenniumThemeConfig
-import org.spotube.spotube.UserSettings
-import org.spotube.spotube.UserSettings.Theme
+import org.spotube.spotube.modules.settings.Theme
+import org.spotube.spotube.modules.settings.UserSettings
 
 /**
  * Semantic color roles used across the app, resolved from the active Millennium palette.
@@ -532,8 +533,8 @@ fun SpotubeTheme(
         config = MillenniumThemeConfig(
             palette = palette,
             colorSchemes = SpotifyColorSchemes,
-            dark = spotifyMillenniumComponents(MillenniumDarkThemeComponents.colors, true),
-            light = spotifyMillenniumComponents(MillenniumLightThemeComponents.colors, false)
+            dark = spotifyMillenniumComponents(SpotifyDarkColors, true),
+            light = spotifyMillenniumComponents(SpotifyLightColors, false)
         )
     ) {
         val colors = appColorsFrom(MillenniumTheme.colors)
