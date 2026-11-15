@@ -401,23 +401,14 @@ private fun spotifyMillenniumComponents(
     val iconBtnHover = iconBtnDefault.copy(
         background = Brush.verticalGradient(0f to highlight, 1f to highlight)
     )
+    val iconBtnStates = MillenniumControlStateProperty(
+        default = iconBtnDefault, hovered = iconBtnHover, focused = iconBtnHover,
+        pressed = iconBtnHover, disabled = iconBtnDefault.copy(alpha = 0.4f),
+        selected = iconBtnHover, error = iconBtnDefault
+    )
 
     // --- Modal Bottom Sheet (compact, 16dp horizontal, 10/8dp vertical) ---
-    val mbsPadding = PaddingValues(16.dp, 16.dp, 10.dp, 8.dp)
-    fun MillenniumModalBottomSheetThemeProperties.compact() =
-        copy(contentPadding = mbsPadding, contentSpacing = 8.dp)
-    val mbsStates = defaultMillenniumModalBottomSheetTheme().states
-    val modalBottomSheetTheme = MillenniumModalBottomSheetTheme(
-        states = MillenniumControlStateProperty(
-            default = mbsStates.default.compact(),
-            hovered = mbsStates.hovered.compact(),
-            focused = mbsStates.focused.compact(),
-            pressed = mbsStates.pressed.compact(),
-            disabled = mbsStates.disabled.compact(),
-            selected = mbsStates.selected.compact(),
-            error = mbsStates.error.compact()
-        )
-    )
+    val modalBottomSheetTheme = compactModalBottomSheetTheme()
 
     // Build component set
     return base.copy(
@@ -472,11 +463,10 @@ private fun spotifyMillenniumComponents(
             selected = progressProps, error = progressProps
         )),
         iconButtonTheme = MillenniumIconButtonTheme(
-            states = MillenniumControlStateProperty(
-                default = iconBtnDefault, hovered = iconBtnHover, focused = iconBtnHover,
-                pressed = iconBtnHover, disabled = iconBtnDefault.copy(alpha = 0.4f),
-                selected = iconBtnHover, error = iconBtnDefault
-            )
+            primary = iconBtnStates,
+            secondary = iconBtnStates,
+            quiet = iconBtnStates,
+            danger = iconBtnStates
         ),
         modalBottomSheetTheme = modalBottomSheetTheme,
         // Keep other components from base
@@ -552,3 +542,22 @@ fun SpotubeTheme(
 /** Whether the active Millennium appearance is light. */
 @Composable
 fun isLightAppearance(): Boolean = MillenniumTheme.colors.background.luminance() > 0.5f
+
+/** Library default is 24dp padding + 16dp spacing, which is far too roomy on phones. */
+private fun compactModalBottomSheetTheme(): MillenniumModalBottomSheetTheme {
+    val padding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp)
+    fun org.spotube.millennium.composables.MillenniumModalBottomSheetThemeProperties.compact() =
+        copy(contentPadding = padding, contentSpacing = 8.dp)
+    val states = defaultMillenniumModalBottomSheetTheme().states
+    return MillenniumModalBottomSheetTheme(
+        states = MillenniumControlStateProperty(
+            default = states.default.compact(),
+            hovered = states.hovered.compact(),
+            focused = states.focused.compact(),
+            pressed = states.pressed.compact(),
+            disabled = states.disabled.compact(),
+            selected = states.selected.compact(),
+            error = states.error.compact()
+        )
+    )
+}
