@@ -21,12 +21,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Checkout compose-webview
-        uses: actions/checkout@v7
-        with:
-          repository: ${{ env.COMPOSE_WEBVIEW_REPO }}
-          ref: ${{ env.COMPOSE_WEBVIEW_COMMIT }}
-          path: compose-webview
+      - name: Clone compose-webview
+        run: |
+          git clone --depth 1 --branch fix/linux-wayland-input \
+            "https://github.com/${COMPOSE_WEBVIEW_REPO}.git" compose-webview
+          cd compose-webview && git rev-parse HEAD
 
       - name: Set up JDK 21
         uses: actions/setup-java@v6
