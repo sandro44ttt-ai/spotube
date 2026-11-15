@@ -39,8 +39,11 @@ fun AppBottombar(
     modifier: Modifier = Modifier,
     libraryBadge: @Composable () -> Unit = { DownloadBadgeIndicator() }
 ) {
+    // Spotify has exactly 4 tabs: Home, Search, Your Library, Settings
+    // Filter to only these 4 (bottombarTabs already defines them in order)
     MillenniumBottomNavigationBar(modifier = modifier) {
         bottombarTabs.filterIsInstance<NavigationItem.Tab<*>>()
+            .take(4) // Home, Search, Library, Settings
             .forEach { tab ->
                 val selected = navigationState.topLevelRoute == tab.route
                 val title = stringResource(tab.title)

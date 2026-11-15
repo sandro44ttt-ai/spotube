@@ -23,7 +23,6 @@ import org.spotube.millennium.composables.MillenniumIconButton
 import org.spotube.millennium.composables.MillenniumIconButtonStyle
 import org.spotube.millennium.composables.MillenniumProgress
 import org.spotube.millennium.theme.millenniumSurface
-import org.spotube.millennium.theme.millenniumPanelBrush
 import org.spotube.millennium.theme.MillenniumTheme
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -70,14 +69,18 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
 
-internal val FloatingPlayerContentHeight = 64.dp
-internal val FloatingPlayerBottomBleed = 16.dp
+/**
+ * Spotify mini player: 62dp height (matches bottom_sheet_now_playing_bar_height),
+ * 16dp horizontal padding, 8dp vertical content padding.
+ * No bottom bleed - the bar sits directly above bottom nav.
+ */
+internal val FloatingPlayerContentHeight = 62.dp
 
 // The floating player on small screens that appears above the floating AppBottombar
 //
 // on left the album art, song title, artists grouped together
 // on right the playback controls
-// top border is actually the progress bar
+// top border is actually the progress bar (2dp, accent color)
 // users can skip to next or previous track by swiping left or right on the player
 //
 // the player can be expanded to the full screen by swiping up on the player, and can be collapsed
@@ -136,31 +139,31 @@ internal fun FloatingPlayerContent(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(FloatingPlayerContentHeight + FloatingPlayerBottomBleed)
+            .height(FloatingPlayerContentHeight)
             .millenniumSurface(
-                background = millenniumPanelBrush(MillenniumTheme.colors),
+                background = MillenniumTheme.colors.background, // solid background matching bottom nav
                 shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
                 borderColor = MillenniumTheme.colors.border,
-                borderWidth = 1.dp,
+                borderWidth = 0.5.dp,
             )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                // Only the surface extends beneath the navigation bar, not the controls.
-                .padding(bottom = FloatingPlayerBottomBleed)
+                .padding(vertical = 8.dp, horizontal = 16.dp) // Spotify: 16dp horizontal, 8dp vertical
         ) {
+            // Progress bar at very top (2dp, accent) - handled by MillenniumProgress theme
             MillenniumProgress(
                 progress = playerUiState.progress,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.dp)
+                    .padding(bottom = 6.dp) // gap between progress and content
             )
-            Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 0.dp), // already padded by column
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -170,10 +173,10 @@ internal fun FloatingPlayerContent(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(48.dp) // Spotify: 48dp artwork in mini player
                             .then(albumArtModifier)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(AppTheme.colors.onSurface.copy(alpha = 0.12f)),
+                            .clip(RoundedCornerShape(4.dp)) // Spotify: 4dp radius on mini player art
+                            .background(AppTheme.colors.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
                         if (coverModel != null) AsyncImage(
@@ -185,20 +188,20 @@ internal fun FloatingPlayerContent(
                         )
                         else MillenniumIcon(
                             Iconsax.IconsaxMusic, contentDescription = null,
-                            tint = AppTheme.colors.onSurfaceVariant, modifier = Modifier.size(22.dp)
+                            tint = AppTheme.colors.onSurfaceVariant, modifier = Modifier.size(24.dp)
                         )
                     }
-                    Column(modifier = Modifier.padding(start = 10.dp)) {
+                    Column(modifier = Modifier.padding(start = 12.dp)) {
                         Text(
                             text = if (playerUiState.queue.isEmpty()) stringResource(Res.string.player_nothing_playing) else playerUiState.title,
-                            style = AppTheme.typography.bodyMedium,
+                            style = AppTheme.typography.bodyMedium, // 14/20
                             color = AppTheme.colors.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         if (playerUiState.queue.isNotEmpty()) Text(
                             text = playerUiState.artists,
-                            style = AppTheme.typography.bodySmall,
+                            style = AppTheme.typography.bodySmall, // 12/16
                             color = AppTheme.colors.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -208,11 +211,11 @@ internal fun FloatingPlayerContent(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     heartButton()
-                    Spacer(modifier = Modifier.size(8.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     MillenniumIconButton(
                         onClick = onPlayPause,
                         enabled = playerUiState.queue.isNotEmpty(),
-                        style = MillenniumIconButtonStyle.Secondary
+                        style = MillenniumIconButtonStyle.Primary // Filled accent pill
                     ) {
                         MillenniumIcon(
                             if (playerUiState.isPlaying) Iconsax.IconsaxPause else Iconsax.IconsaxPlay,
