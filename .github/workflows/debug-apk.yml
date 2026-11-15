@@ -10,7 +10,6 @@ permissions:
 
 env:
   COMPOSE_WEBVIEW_REPO: KRTirtho/ComposeNativeWebview
-  COMPOSE_WEBVIEW_COMMIT: b11ac748de1219f9332338c067a2c5dafef3072a
 
 jobs:
   android-apk:
@@ -38,8 +37,9 @@ jobs:
 
       - name: Install Android platform and NDK
         run: |
-          sdkmanager --install "platforms;android-37" "build-tools;37.0.0" || true
-          sdkmanager --install "ndk;28.2.13676358" || true
+          sdkmanager --install "platforms;android-37" 2>&1 | tail -5 || true
+          sdkmanager --install "build-tools;37.0.0" 2>&1 | tail -5 || true
+          sdkmanager --install "ndk;28.2.13676358" 2>&1 | tail -5 || true
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -63,14 +63,26 @@ jobs:
             -x buildNativeWindows \
             --stacktrace
 
-      - name: Verify compose-webview in mavenLocal
+      - name: Show Android SDK state
         run: |
-          ls -R ~/.m2/repository/dev/nucleusframework | head -40
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "--- platforms ---"; ls -1 "$ANDROID_HOME/platforms" || true
+          echo "--- build-tools ---"; ls -1 "$ANDROID_HOME/build-tools" || true
+          echo "--- ndk ---"; ls -1 "$ANDROID_HOME/ndk" 2>/dev/null || true
 
       - name: Build debug APK
         run: |
-          chmod +x gradlew
-          ./gradlew :composeApp:assembleStableDebug --stacktrace
+          set -o pipefail
+          ./gradlew :composeApp:assembleStableDebug --stacktrace 2>&1 | tee apk-build.log
+
+      - name: Report build errors
+        if: failure()
+        run: |
+          echo "===== last 50 log lines ====="
+          tail -50 apk-build.log || true
+          echo "===== key errors ====="
+          grep -nE "What went wrong|Caused by:|^e: |^FAILURE|Could not (find|resolve|determine)|error:|Failed to " apk-build.log | tail -25 || true
+          while IFS= read -r line; do echo "::error::$line"; done < <(grep -E "What went wrong|Caused by:|^e: |^FAILURE|Could not (find|resolve|determine)|Failed to " apk-build.log | tail -12) || true
 
       - name: Show APK files
         run: find composeApp/build/outputs/apk -name "*.apk" -type f
