@@ -38,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.composeunstyled.Text
+import com.composeunstyled.currentWindowWidthBreakpoint
+import org.spotube.millennium.adaptive.WindowBreakpoints
 import org.spotube.plugin_interfaces.plugin_apis.metadata.album.MetadataAlbum
 import org.spotube.plugin_interfaces.plugin_apis.metadata.artist.MetadataArtist
 import org.spotube.plugin_interfaces.plugin_apis.metadata.track.MetadataTrack
@@ -100,6 +102,8 @@ fun CollectionView(
     isJamGuest: Boolean = false,
     onAddToJam: (List<MetadataTrack>) -> Unit = {},
     trackOptionsState: (MetadataTrack) -> TrackOptionsState = { TrackOptionsState() },
+    trackCount: Int = 0,
+    totalDurationMs: Long = 0L,
     footerContent: (@Composable () -> Unit)? = null,
     trailingContent: @Composable () -> Unit = {}) {
     val listState = rememberLazyListState()
@@ -109,10 +113,57 @@ fun CollectionView(
                 listState.firstVisibleItemScrollOffset > 400
         }
     }
+    val isCompact = currentWindowWidthBreakpoint() isBelow WindowBreakpoints.Medium
+    val statsText = when {
+        totalDurationMs <= 0L -> null
+        else -> {
+            val totalMinutes = (totalDurationMs / 60_000L).toInt()
+            val hours = totalMinutes / 60
+            val minutes = totalMinutes % 60
+            if (hours > 0) {
+                stringResource(
+                    Res.string.collection_details_duration_hours_minutes,
+                    hours,
+                    minutes)
+            } else {
+                stringResource(
+                    Res.string.collection_details_duration_minutes,
+                    minutes.coerceAtLeast(1))
+            }
+        }
+    }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    val details: @Composable (Boolean) -> Unit = { skeleton ->
+        CollectionDetails(
+            title = if (skeleton) title.ifBlank { stringResource(Res.string.common_loading) } else title,
+            description = description,
+            imageURL = imageURL,
+            imageResource = imageResource,
+            ownerName = if (skeleton) ownerName.ifBlank { stringResource(Res.string.common_unknown) } else ownerName,
+            ownerImageURL = ownerImageURL,
+            onOwnerClick = onOwnerClick,
+            onPlay = onPlay,
+            onShufflePlay = onShufflePlay,
+            onAddToQueue = onAddToQueue,
+            isPlaying = isPlaying,
+            isFollowing = isFollowing,
+            isFollowLoading = isFollowLoading,
+            isPlayLoading = isPlayLoading,
+            isShuffleLoading = isShuffleLoading,
+            isAddToQueueLoading = isAddToQueueLoading,
+            onFollowClick = onFollowClick,
+            showFollowButton = showFollowButton,
+            onEdit = onEdit,
+            statsText = if (skeleton) null else statsText,
+            sharedElementKey = sharedElementKey,
+            isJamGuest = isJamGuest,
+            onAddToJam = { onAddToJam(tracks) })
+    }
+
+    val collectionBar: @Composable () -> Unit = {
         ApplicationMainBar(
             backButton = true,
+            transparent = isCompact && !isCollapsed,
             title = if (isCollapsed) {
                 {
                     CollapsedCollectionTitle(
@@ -137,8 +188,9 @@ fun CollectionView(
             } else {
                 {}
             })
+    }
 
-        Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+    val listContent: @Composable () -> Unit = {
         if (error != null && tracks.isEmpty() && !isLoading) {
             ErrorDisplay(
                 errorMessage = error,
@@ -151,54 +203,10 @@ fun CollectionView(
                 headerContent = {
                     if (isLoading && tracks.isEmpty()) {
                         org.spotube.spotube.core.ui.misc.SkeletonTree(true) {
-                            CollectionDetails(
-                                title = title.ifBlank { stringResource(Res.string.common_loading) },
-                                description = description,
-                                imageURL = imageURL,
-                                imageResource = imageResource,
-                                ownerName = ownerName.ifBlank { stringResource(Res.string.common_unknown) },
-                                ownerImageURL = ownerImageURL,
-                                onOwnerClick = onOwnerClick,
-                                onPlay = onPlay,
-                                onShufflePlay = onShufflePlay,
-                                onAddToQueue = onAddToQueue,
-                                isPlaying = isPlaying,
-                                isFollowing = isFollowing,
-                                isFollowLoading = isFollowLoading,
-                                isPlayLoading = isPlayLoading,
-                                isShuffleLoading = isShuffleLoading,
-                                isAddToQueueLoading = isAddToQueueLoading,
-                                onFollowClick = onFollowClick,
-                                showFollowButton = showFollowButton,
-                                onEdit = onEdit,
-                                sharedElementKey = sharedElementKey,
-                                isJamGuest = isJamGuest,
-                                onAddToJam = { onAddToJam(tracks) })
+                            details(true)
                         }
                     } else {
-                        CollectionDetails(
-                            title = title,
-                            description = description,
-                            imageURL = imageURL,
-                            imageResource = imageResource,
-                            ownerName = ownerName,
-                            ownerImageURL = ownerImageURL,
-                            onOwnerClick = onOwnerClick,
-                            onPlay = onPlay,
-                            onShufflePlay = onShufflePlay,
-                            onAddToQueue = onAddToQueue,
-                            isPlaying = isPlaying,
-                            isFollowing = isFollowing,
-                            isFollowLoading = isFollowLoading,
-                            isPlayLoading = isPlayLoading,
-                            isShuffleLoading = isShuffleLoading,
-                            isAddToQueueLoading = isAddToQueueLoading,
-                            onFollowClick = onFollowClick,
-                            showFollowButton = showFollowButton,
-                            onEdit = onEdit,
-                            sharedElementKey = sharedElementKey,
-                            isJamGuest = isJamGuest,
-                            onAddToJam = { onAddToJam(tracks) })
+                        details(false)
                     }
                 },
                 footerContent = footerContent,
@@ -224,8 +232,21 @@ fun CollectionView(
                 isJamGuest = isJamGuest,
                 trackOptionsState = trackOptionsState)
         }
+    }
 
-        trailingContent()
+    if (isCompact) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            listContent()
+            collectionBar()
+            trailingContent()
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxSize()) {
+            collectionBar()
+            Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                listContent()
+                trailingContent()
+            }
         }
     }
 }

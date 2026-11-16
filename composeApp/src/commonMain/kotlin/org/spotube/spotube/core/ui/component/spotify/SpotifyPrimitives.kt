@@ -17,14 +17,18 @@
 
 package org.spotube.spotube.core.ui.component.spotify
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,15 +42,25 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -602,3 +616,181 @@ fun spotifyPlayerGradient(): Brush = Brush.verticalGradient(
     0f to SpotifyTokens.Highlight,
     1f to SpotifyTokens.Base
 )
+
+private fun playerTint(seed: String?, lightness: Float): Color {
+    val hash = (seed ?: "").hashCode() and 0x7FFFFFFF
+    val hue = (hash % 360).toFloat()
+    val saturation = 0.38f + ((hash / 360) % 22) / 100f
+    return hslColor(hue, saturation.coerceIn(0f, 1f), lightness)
+}
+
+private fun hslColor(hue: Float, saturation: Float, lightness: Float): Color {
+    val h = ((hue % 360f) + 360f) % 360f / 60f
+    val c = (1f - kotlin.math.abs(2f * lightness - 1f)) * saturation
+    val x = c * (1f - kotlin.math.abs(h % 2f - 1f))
+    val m = lightness - c / 2f
+    val (r, g, b) = when (h.toInt()) {
+        0 -> Triple(c, x, 0f)
+        1 -> Triple(x, c, 0f)
+        2 -> Triple(0f, c, x)
+        3 -> Triple(0f, x, c)
+        4 -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    return Color(r + m, g + m, b + m)
+}
+
+/**
+ * Spotify now playing backdrop: a dark tint derived from the current artwork,
+ * fading into the page color. The seed is stable per track, so the color changes
+ * with the song exactly like the real player.
+ */
+@Composable
+fun spotifyPlayerTintBrush(seed: String?): Brush {
+    val top = remember(seed) { playerTint(seed, 0.23f) }
+    val bottomTint = remember(seed) { playerTint(seed, 0.12f) }
+    return Brush.verticalGradient(
+        0f to top,
+        0.42f to bottomTint,
+        0.72f to SpotifyTokens.Base,
+        1f to SpotifyTokens.Base
+    )
+}
+
+/** Exact Spotify explicit badge (`ic_explicit`): rounded gray square with a cut-out E. */
+@Composable
+fun SpotifyExplicitBadge(
+    modifier: Modifier = Modifier,
+    size: Dp = 16.dp
+) {
+    MillenniumIcon(
+        imageVector = Iconsax.SpotifyExplicit,
+        contentDescription = null,
+        modifier = modifier.size(size),
+        tint = SpotifyTokens.Muted
+    )
+}
+
+/** Spotify 2026 seek bar: 4dp white track, white thumb, 12sp timestamps. */
+@Composable
+fun SpotifySeekBar(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    var widthPx by remember { mutableFloatStateOf(0f) }
+    val trackHeight = 4.dp
+    val thumbRadius = 5.dp
+    val activeColor = if (enabled) Color.White else Color.White.copy(alpha = 0.35f)
+    val inactiveColor = Color.White.copy(alpha = 0.25f)
+
+    Box(
+        modifier = modifier
+            .height(24.dp)
+            .onSizeChanged { widthPx = it.width.toFloat() }
+            .pointerInput(enabled, widthPx) {
+                if (!enabled) return@pointerInput
+                detectTapGestures { offset ->
+                    if (widthPx > 0f) {
+                        onValueChange((offset.x / widthPx).coerceIn(0f, 1f))
+                        onValueChangeFinished()
+                    }
+                }
+            }
+            .pointerInput(enabled, widthPx) {
+                if (!enabled) return@pointerInput
+                detectHorizontalDragGestures(
+                    onDragEnd = { onValueChangeFinished() },
+                    onDragCancel = { onValueChangeFinished() }
+                ) { change, _ ->
+                    if (widthPx > 0f) {
+                        onValueChange((change.position.x / widthPx).coerceIn(0f, 1f))
+                        change.consume()
+                    }
+                }
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Canvas(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
+            val centerY = size.height / 2f
+            val w = size.width
+            val thumbR = thumbRadius.toPx()
+            val progress = value.coerceIn(0f, 1f)
+            drawLine(
+                color = inactiveColor,
+                start = Offset(0f, centerY),
+                end = Offset(w, centerY),
+                strokeWidth = trackHeight.toPx(),
+                cap = StrokeCap.Round
+            )
+            val activeX = (w * progress).coerceIn(thumbR, (w - thumbR).coerceAtLeast(thumbR))
+            drawLine(
+                color = activeColor,
+                start = Offset(0f, centerY),
+                end = Offset(activeX, centerY),
+                strokeWidth = trackHeight.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawCircle(color = activeColor, radius = thumbR, center = Offset(activeX, centerY))
+        }
+    }
+}
+
+/** Spotify player bottom action (Lyrics / Share / Queue): 24dp icon with 11sp label. */
+@Composable
+fun SpotifyPlayerAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        MillenniumIcon(
+            imageVector = icon,
+            contentDescription = label,
+            modifier = Modifier.size(24.dp),
+            tint = SpotifyTokens.Muted
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = AppTheme.typography.labelSmall.copy(
+                fontSize = 11.sp,
+                color = SpotifyTokens.Muted
+            ),
+            maxLines = 1
+        )
+    }
+}
+
+/** Small circular outlined "+" next to the track title on the now playing screen. */
+@Composable
+fun SpotifyCircleAddButton(
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .border(1.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        MillenniumIcon(
+            imageVector = Iconsax.SpotifyPlus,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(16.dp),
+            tint = Color.White
+        )
+    }
+}

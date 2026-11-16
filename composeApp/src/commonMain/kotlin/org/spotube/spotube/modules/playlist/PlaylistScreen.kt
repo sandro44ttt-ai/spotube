@@ -140,6 +140,8 @@ fun PlaylistScreen(
         error = errorMessage,
         onRetry = { viewModel.refresh() },
         tracks = dataState?.tracks ?: emptyList(),
+        trackCount = playlist?.trackCount ?: dataState?.tracks?.size ?: 0,
+        totalDurationMs = dataState?.tracks?.sumOf { it.durationMs } ?: 0L,
         hasMore = dataState?.nextPagination != null,
         isLoadingNextPage = state is PlaylistScreenState.Data.LoadingMore,
         currentTrackId = trackOptionsContext.currentTrackId,

@@ -92,6 +92,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.spotube.spotube.core.ui.component.spotify.SpotifyExplicitBadge
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -269,6 +270,7 @@ fun TrackList(
             track = track,
             showIndex = showIndex,
             showAlbum = showAlbum,
+            showDuration = !isCompact,
             useDropdownForOptions = useDropdownForOptions,
             isCurrentTrack = track.id == currentTrackId,
             // Only the current row depends on it, so play/pause/buffering flips don't recompose every row.
@@ -332,6 +334,7 @@ fun TrackList(
                     index = shimmerIndex + 1,
                     showIndex = showIndex,
                     showAlbum = showAlbum,
+                    showDuration = !isCompact,
                     useDropdownForOptions = useDropdownForOptions)
             }
         }
@@ -359,6 +362,7 @@ fun TrackList(
                 index = visibleTracks.size + 1,
                 showIndex = showIndex,
                 showAlbum = showAlbum,
+                showDuration = !isCompact,
                 useDropdownForOptions = useDropdownForOptions)
         }
     }
@@ -608,6 +612,7 @@ private fun TrackListRow(
     track: MetadataTrack,
     showIndex: Boolean,
     showAlbum: Boolean,
+    showDuration: Boolean,
     useDropdownForOptions: Boolean,
     isCurrentTrack: Boolean,
     isCurrentTrackPlaying: Boolean,
@@ -658,10 +663,18 @@ private fun TrackListRow(
                 overflow = TextOverflow.Ellipsis)
         },
         subtitle = {
-            ArtistChips(
-                artists = track.artists,
-                onArtistClick = onArtistClick,
-                onArtistsOverflowClick = onArtistsOverflowClick)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (track.explicit == true) {
+                    SpotifyExplicitBadge(size = 14.dp)
+                }
+                ArtistChips(
+                    artists = track.artists,
+                    onArtistClick = onArtistClick,
+                    onArtistsOverflowClick = onArtistsOverflowClick,
+                    modifier = Modifier.weight(1f))
+            }
         },
         leading = {
             Row(
@@ -776,12 +789,14 @@ private fun TrackListRow(
                                 }))
                 }
 
-                TextWithShimmer(
-                    text = track.durationMs.toDurationString(),
-                    style = AppTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                    textAlign = TextAlign.End,
-                    color = SpotifyTokens.Muted,
-                    modifier = Modifier.width(56.dp))
+                if (showDuration) {
+                    TextWithShimmer(
+                        text = track.durationMs.toDurationString(),
+                        style = AppTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                        textAlign = TextAlign.End,
+                        color = SpotifyTokens.Muted,
+                        modifier = Modifier.width(56.dp))
+                }
 
                 if (useDropdownForOptions) {
                     TrackOptions(
@@ -808,12 +823,13 @@ private fun TrackListRow(
 private fun ArtistChips(
     artists: List<MetadataArtist.Basic>,
     onArtistClick: (MetadataArtist.Basic) -> Unit,
-    onArtistsOverflowClick: () -> Unit) {
+    onArtistsOverflowClick: () -> Unit,
+    modifier: Modifier = Modifier) {
     val visibleArtists = artists.take(2)
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth()) {
+        modifier = modifier.fillMaxWidth()) {
         visibleArtists.forEachIndexed { index, artist ->
             Row(
                 verticalAlignment = Alignment.CenterVertically) {
@@ -861,6 +877,7 @@ private fun ShimmerTrackListRow(
     index: Int,
     showIndex: Boolean,
     showAlbum: Boolean,
+    showDuration: Boolean,
     useDropdownForOptions: Boolean) {
     val dummyTrack = remember(index) { dummyTrackForShimmer(index) }
     SkeletonTree(true) {
@@ -869,6 +886,7 @@ private fun ShimmerTrackListRow(
             track = dummyTrack,
             showIndex = showIndex,
             showAlbum = showAlbum,
+            showDuration = showDuration,
             useDropdownForOptions = useDropdownForOptions,
             isCurrentTrack = false,
             isCurrentTrackPlaying = false,

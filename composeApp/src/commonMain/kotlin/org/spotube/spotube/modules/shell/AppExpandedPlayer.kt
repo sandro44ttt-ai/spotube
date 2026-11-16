@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -53,7 +54,6 @@ import org.spotube.millennium.composables.MillenniumIconButton
 import org.spotube.millennium.composables.MillenniumIconButtonStyle
 import org.spotube.millennium.composables.MillenniumModalBottomSheet
 import org.spotube.millennium.composables.MillenniumCard
-import org.spotube.millennium.composables.MillenniumSlider
 import org.spotube.millennium.theme.MillenniumTheme
 import org.spotube.millennium.theme.millenniumPanelBrush
 import org.spotube.millennium.theme.millenniumSurface
@@ -74,7 +74,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -93,6 +92,13 @@ import org.spotube.spotube.core.jam.JamRole
 import org.spotube.spotube.core.jam.JamRoomService
 import org.spotube.spotube.core.navigation.NavigationCommands
 import org.spotube.spotube.core.navigation.Routes
+import org.spotube.spotube.core.share.ShareService
+import org.spotube.spotube.core.ui.component.spotify.SpotifyCircleAddButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyExplicitBadge
+import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayerAction
+import org.spotube.spotube.core.ui.component.spotify.SpotifySeekBar
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
+import org.spotube.spotube.core.ui.component.spotify.spotifyPlayerTintBrush
 import org.spotube.spotube.modules.downloads.DownloadProgressIcon
 import org.spotube.spotube.modules.downloads.DownloadStatus
 import org.spotube.spotube.modules.downloads.DownloadsViewModel
@@ -108,7 +114,6 @@ import org.spotube.spotube.resources.iconsax.IconsaxCd
 import org.spotube.spotube.resources.iconsax.IconsaxCheckCircle
 import org.spotube.spotube.resources.iconsax.IconsaxCloseSquare
 import org.spotube.spotube.resources.iconsax.IconsaxDirectboxReceive
-import org.spotube.spotube.resources.iconsax.IconsaxMusicFilter
 import org.spotube.spotube.resources.iconsax.IconsaxNext
 import org.spotube.spotube.resources.iconsax.IconsaxPause
 import org.spotube.spotube.resources.iconsax.IconsaxPlay
@@ -158,6 +163,7 @@ import spotube.composeapp.generated.resources.player_seek_label
 import spotube.composeapp.generated.resources.player_sleep_timer
 import spotube.composeapp.generated.resources.player_track_details
 import spotube.composeapp.generated.resources.queue_title
+import spotube.composeapp.generated.resources.track_options_share
 
 // The expanded player on small screens
 // on the top left it has a angle/chevron down that can be used to collapse the player back to the
@@ -201,6 +207,7 @@ fun AppExpandedPlayer(
     val downloadsViewModel: DownloadsViewModel = koinViewModel()
     val navigationCommands: NavigationCommands = koinInject()
     val currentEntry by audioPlayerQueue.currentQueueEntryFlow.collectAsStateWithLifecycle()
+    val shareService: ShareService = koinInject()
     val playerOptionsUiState by playerOptionsViewModel.uiState.collectAsStateWithLifecycle()
     val currentTrack = remember(currentEntry) {
         (currentEntry as? QueueEntry.StreamingTrack)?.track
@@ -288,10 +295,8 @@ fun AppExpandedPlayer(
         modifier = modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    0f to Color(0xFF3A3A3A),
-                    0.45f to AppTheme.colors.background,
-                    1f to AppTheme.colors.background
+                spotifyPlayerTintBrush(
+                    currentTrack?.album?.id ?: currentTrack?.id ?: playerUiState.title
                 )
             )
     ) {
@@ -527,55 +532,60 @@ fun AppExpandedPlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.Start
                 ) {
-                    Text(
-                        text = playerUiState.title,
-                        style = AppTheme.typography.headlineSmall.copy(
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Start
-                    )
-                    PlayerArtistsText(
-                        artists = playerUiState.artistList,
-                        onArtistClick = { artistId ->
-                            navigationCommands.navigateTo(Routes.Artist(artistId))
-                            // The page opens beneath the player, so get out of the way
-                            onCollapse()
-                        },
-                        style = AppTheme.typography.bodyLarge,
-                        color = AppTheme.colors.onSurfaceVariant,
-                        textAlign = TextAlign.Start
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PlayerHeartButton(
-                        audioPlayerQueue = audioPlayerQueue,
-                        savedTracksViewModel = savedTracksViewModel
-                    )
-                    MillenniumIconButton(
-                        onClick = onQueue,
-                        style = MillenniumIconButtonStyle.Quiet
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = playerUiState.title,
+                            style = AppTheme.typography.headlineSmall.copy(
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        SpotifyCircleAddButton(
+                            contentDescription = stringResource(Res.string.player_options_content_description),
+                            onClick = playerOptionsViewModel::showMoreOptionsSheet
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        MillenniumIcon(
-                            Iconsax.IconsaxMusicFilter,
-                            contentDescription = stringResource(Res.string.queue_title),
-                            tint = Color.White
+                        if (currentTrack?.explicit == true) {
+                            SpotifyExplicitBadge()
+                        }
+                        PlayerArtistsText(
+                            artists = playerUiState.artistList,
+                            onArtistClick = { artistId ->
+                                navigationCommands.navigateTo(Routes.Artist(artistId))
+                                // The page opens beneath the player, so get out of the way
+                                onCollapse()
+                            },
+                            style = AppTheme.typography.bodyLarge,
+                            color = Color.White,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
+                PlayerHeartButton(
+                    audioPlayerQueue = audioPlayerQueue,
+                    savedTracksViewModel = savedTracksViewModel
+                )
             }
 
             Column(modifier = Modifier.padding(top = 20.dp)) {
-                MillenniumSlider(
+                SpotifySeekBar(
                     value = seekProgress,
                     onValueChange = {
                         seekProgress = it
@@ -586,7 +596,6 @@ fun AppExpandedPlayer(
                         onSeekFinished()
                     },
                     enabled = playerUiState.seekDuration.inWholeMilliseconds > 0L,
-                    label = stringResource(Res.string.player_seek_label),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(
@@ -598,13 +607,13 @@ fun AppExpandedPlayer(
                 ) {
                     Text(
                         text = formatPlayerTime(playerUiState.position),
-                        style = AppTheme.typography.labelSmall,
-                        color = AppTheme.colors.onSurfaceVariant
+                        style = AppTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                        color = SpotifyTokens.Muted
                     )
                     Text(
                         text = formatPlayerTime(playerUiState.displayDuration),
-                        style = AppTheme.typography.labelSmall,
-                        color = AppTheme.colors.onSurfaceVariant
+                        style = AppTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                        color = SpotifyTokens.Muted
                     )
                 }
                 Row(
@@ -686,6 +695,36 @@ fun AppExpandedPlayer(
                     .padding(bottom = 16.dp),
                 onExpand = onExpandLyrics
             )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SpotifyPlayerAction(
+                    icon = Iconsax.SpotifyLyrics,
+                    label = stringResource(Res.string.player_lyrics),
+                    onClick = onExpandLyrics
+                )
+                SpotifyPlayerAction(
+                    icon = Iconsax.SpotifyShareGlyph,
+                    label = stringResource(Res.string.track_options_share),
+                    onClick = {
+                        val track = currentTrack
+                        val uri = track?.externalUri
+                        if (track != null && uri != null) {
+                            shareService.share(uri, track.title)
+                        }
+                    }
+                )
+                SpotifyPlayerAction(
+                    icon = Iconsax.SpotifyQueueGlyph,
+                    label = stringResource(Res.string.queue_title),
+                    onClick = onQueue
+                )
+            }
         }
 
         MillenniumSnackbarHost(

@@ -87,6 +87,8 @@ fun SavedTracksScreen(
         error = errorMessage,
         onRetry = { viewModel.refresh() },
         tracks = dataState?.tracks ?: emptyList(),
+        trackCount = dataState?.totalCount ?: dataState?.tracks?.size ?: 0,
+        totalDurationMs = dataState?.tracks?.sumOf { it.durationMs } ?: 0L,
         hasMore = dataState?.nextPagination != null,
         isLoadingNextPage = state is SavedTracksScreenState.Data.LoadingMore,
         currentTrackId = trackOptionsContext.currentTrackId,

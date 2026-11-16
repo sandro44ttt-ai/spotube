@@ -105,6 +105,7 @@ fun CollectionDetails(
     onFollowClick: () -> Unit = { },
     showFollowButton: Boolean = true,
     onEdit: (() -> Unit)? = null,
+    statsText: String? = null,
     sharedElementKey: String? = null) {
     Box(
         modifier = modifier
@@ -366,13 +367,40 @@ fun CollectionDetails(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis)
                         }
-                        Text(
-                            text = ownerName,
-                            style = AppTheme.typography.bodyMedium.copy(
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold),
-                            color = Color.White,
-                            maxLines = 1)
+                        if (ownerName.trim().equals("Spotify", ignoreCase = true)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                MillenniumIcon(
+                                    imageVector = Iconsax.SpotifyLogo,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = SpotifyTokens.Green)
+                                Text(
+                                    text = stringResource(Res.string.collection_details_spotify_verified),
+                                    style = AppTheme.typography.bodyMedium.copy(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold),
+                                    color = SpotifyTokens.Green,
+                                    maxLines = 1)
+                            }
+                        } else {
+                            Text(
+                                text = ownerName,
+                                style = AppTheme.typography.bodyMedium.copy(
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold),
+                                color = Color.White,
+                                maxLines = 1)
+                        }
+                        if (!statsText.isNullOrBlank()) {
+                            Text(
+                                text = statsText,
+                                style = AppTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                color = SpotifyTokens.Muted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically) {

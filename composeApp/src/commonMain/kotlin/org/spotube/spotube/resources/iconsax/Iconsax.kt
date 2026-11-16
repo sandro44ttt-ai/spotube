@@ -1,6 +1,7 @@
 package org.spotube.spotube.resources.iconsax
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
@@ -193,4 +194,155 @@ object Iconsax {
 
     @Suppress("ObjectPropertyName")
     private var _SpotifyLibrary: ImageVector? = null
+
+    /** Exact Spotify explicit badge (`ic_explicit`): 16dp gray square with a cut-out E. */
+    val SpotifyExplicit: ImageVector
+        get() {
+            if (_SpotifyExplicit != null) return _SpotifyExplicit!!
+            _SpotifyExplicit = ImageVector.Builder(
+                name = "SpotifyExplicit",
+                defaultWidth = 16.dp,
+                defaultHeight = 16.dp,
+                viewportWidth = 32f,
+                viewportHeight = 32f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M4,0C1.791,0 0,1.791 0,4V28C0,30.209 1.791,32 4,32H28C30.209,32 32,30.209 32,28V4C32,1.791 30.209,0 28,0H4ZM22.222,22.192V25.778H10.667V6.222H22.222V9.808H14.258V14.276H21.467V17.669H14.258V22.192H22.222Z"
+                    ),
+                    pathFillType = PathFillType.EvenOdd,
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyExplicit!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyExplicit: ImageVector? = null
+
+    /** Exact Spotify logo glyph (`encore_icon_spotify_logo_24`). */
+    val SpotifyLogo: ImageVector
+        get() {
+            if (_SpotifyLogo != null) return _SpotifyLogo!!
+            _SpotifyLogo = ImageVector.Builder(
+                name = "SpotifyLogo",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M12.438,1.009C6.368,0.769 1.251,5.494 1.008,11.565c-0.24,6.07 4.485,11.186 10.556,11.426 6.07,0.242 11.185,-4.484 11.427,-10.554S18.507,1.251 12.438,1.009m4.644,16.114a0.657,0.657 0,0 1,-0.897 0.246,13.2 13.2 0,0 0,-4.71 -1.602 13.2,13.2 0,0 0,-4.968 0.242,0.658 0.658 0,0 1,-0.31 -1.278 14.5,14.5 0,0 1,5.46 -0.265c1.837,0.257 3.579,0.851 5.177,1.76 0.315,0.178 0.425,0.58 0.246,0.896zM18.527,14.236a0.853,0.853 0,0 1,-1.158 0.344,16.2 16.2 0,0 0,-5.475 -1.797 16.2,16.2 0,0 0,-5.758 0.219,0.855 0.855 0,0 1,-1.018 -0.65 0.85,0.85 0,0 1,0.65 -1.018,17.9 17.9 0,0 1,6.362 -0.241 17.9,17.9 0,0 1,6.049 1.985c0.415,0.224 0.57,0.743 0.344,1.158zM20.129,10.981a1.05,1.05 0,0 1,-1.418 0.448,19.7 19.7 0,0 0,-6.341 -2.025 19.6,19.6 0,0 0,-6.655 0.199,1.05 1.05 0,1 1 -0.417,-2.06 21.7,21.7 0,0 1,7.364 -0.22,21.7 21.7 0,0 1,7.019 2.24c0.515,0.268 0.715,0.903 0.448,1.418"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyLogo!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyLogo: ImageVector? = null
+
+    /** Exact Spotify pin glyph (`encore_icon_pin_24`). */
+    val SpotifyPin: ImageVector
+        get() {
+            if (_SpotifyPin != null) return _SpotifyPin!!
+            _SpotifyPin = ImageVector.Builder(
+                name = "SpotifyPin",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M13.158,2.089a3.72,3.72 0,0 1,5.258 0l3.495,3.495a3.72,3.72 0,0 1,0 5.258l-5.08,5.08 -1.83,6.831 -6.17,-6.17 -6.124,6.124a1,1 0,0 1,-1.414 -1.414l6.124,-6.124L1.247,9l6.83,-1.83z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyPin!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyPin: ImageVector? = null
+
+    /** Exact Spotify mic glyph (`encore_icon_mic_24`), used for the Lyrics action. */
+    val SpotifyLyrics: ImageVector
+        get() {
+            if (_SpotifyLyrics != null) return _SpotifyLyrics!!
+            _SpotifyLyrics = ImageVector.Builder(
+                name = "SpotifyLyrics",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M7,5a5,5 0,0 1,10 0v6a5,5 0,0 1,-10 0zM12,2a3,3 0,0 0,-3 3v6a3,3 0,1 0,6 0L15,5a3,3 0,0 0,-3 -3"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+                addPath(
+                    pathData = addPathNodes(
+                        "M3,7a1,1 0,0 1,1 1v3a8,8 0,1 0,16 0V8a1,1 0,1 1,2 0v3c0,5.185 -3.947,9.449 -9,9.95V24h-2v-3.05c-5.053,-0.5 -9,-4.764 -9,-9.95V8a1,1 0,0 1,1 -1"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyLyrics!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyLyrics: ImageVector? = null
+
+    /** Exact Spotify share glyph (`encore_icon_share_android_24`). */
+    val SpotifyShareGlyph: ImageVector
+        get() {
+            if (_SpotifyShareGlyph != null) return _SpotifyShareGlyph!!
+            _SpotifyShareGlyph = ImageVector.Builder(
+                name = "SpotifyShareGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M18.5,4a1.5,1.5 0,1 0,0 3,1.5 1.5,0 0,0 0,-3M15,5.5a3.5,3.5 0,1 1,1.006 2.455L9,12l7.006,4.045a3.5,3.5 0,1 1,-0.938 1.768l-6.67,-3.85a3.5,3.5 0,1 1,0 -3.924l6.67,-3.852A3.5,3.5 0,0 1,15 5.5m-9.5,5a1.5,1.5 0,1 0,0 3,1.5 1.5,0 0,0 0,-3m13,6.5a1.5,1.5 0,1 0,-0.001 3,1.5 1.5,0 0,0 0.001,-3"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyShareGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyShareGlyph: ImageVector? = null
+
+    /** Exact Spotify queue glyph (`encore_icon_queue_24`). */
+    val SpotifyQueueGlyph: ImageVector
+        get() {
+            if (_SpotifyQueueGlyph != null) return _SpotifyQueueGlyph!!
+            _SpotifyQueueGlyph = ImageVector.Builder(
+                name = "SpotifyQueueGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M21,22L3,22v-2h18zM21,16L3,16v-2h18zM2.05,6.546a3.5,3.5 0,0 1,3.5 -3.5h13a3.5,3.5 0,0 1,0 7h-13a3.5,3.5 0,0 1,-3.5 -3.5m3.5,-1.5a1.5,1.5 0,0 0,0 3h13a1.5,1.5 0,0 0,0 -3z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyQueueGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyQueueGlyph: ImageVector? = null
 }

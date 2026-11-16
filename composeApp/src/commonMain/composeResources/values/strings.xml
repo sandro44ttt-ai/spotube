@@ -810,6 +810,9 @@
     <string name="collection_details_unfollow">Unfollow</string>
     <string name="collection_details_edit_playlist">Edit playlist</string>
     <string name="collection_details_by_owner">By %1$s</string>
+    <string name="collection_details_spotify_verified">Spotify</string>
+    <string name="collection_details_duration_hours_minutes">%1$d hr %2$d min</string>
+    <string name="collection_details_duration_minutes">%1$d min</string>
 
     <!-- Track options -->
     <string name="track_options_title">Track options</string>
@@ -913,6 +916,7 @@
     <string name="player_expand_lyrics_content_description">Expand lyrics</string>
     <string name="player_now_playing">Now Playing</string>
     <string name="player_lyrics">Lyrics</string>
+    <string name="player_add_to_playlist_content_description">Add to playlist</string>
     <string name="player_alternative_source">Alternative Source</string>
     <string name="player_alternative_source_content_description">Alternative source</string>
     <string name="player_download">Download</string>
