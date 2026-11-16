@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -156,8 +157,6 @@ private fun LibraryTabs(state: LibraryToolbarUiState, onTabSelected: (LibraryTab
         }
     }
 }
-
-import androidx.compose.ui.graphics.Color
 
 @Composable
 internal fun LibraryToolbarTitle(

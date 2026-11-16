@@ -4,6 +4,7 @@
 package org.spotube.spotube.core.ui.component.cards
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -73,12 +75,10 @@ fun PlayableListTile(
     val subtitleColor = if (isPlaying) SpotifyTokens.Green else SpotifyTokens.Muted
 
     MillenniumListTile(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color.Transparent),
+        modifier = modifier,
         onClick = onClick ?: onPlay,
         selected = false,
-        background = Color.Transparent,
+        background = Brush.solid(Color.Transparent),
         shape = RoundedCornerShape(0.dp),
         borderWidth = 0.dp,
         borderColor = Color.Transparent,
