@@ -28,6 +28,7 @@ import org.spotube.millennium.composables.MillenniumIconButton
 import org.spotube.millennium.composables.MillenniumIconButtonStyle
 import org.spotube.millennium.composables.MillenniumSeparator
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,10 +37,12 @@ import org.spotube.millennium.adaptive.WindowBreakpoints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
@@ -61,6 +64,7 @@ import org.spotube.spotube.core.ui.misc.TextWithShimmer
 import org.spotube.spotube.core.ui.misc.shimmerApply
 import org.spotube.spotube.core.ui.component.spotify.SpotifyOutlineCircleIconButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayPillButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.resources.iconsax.Iconsax
 import org.spotube.spotube.resources.iconsax.IconsaxAddSquare
 import org.spotube.spotube.resources.iconsax.IconsaxEdit
@@ -301,22 +305,131 @@ fun CollectionDetails(
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)) {
             if (isCompact) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Phone layout: full-bleed artwork with the title over it, then the
+                // description / owner / actions block, exactly like the Spotify app.
+                Column(Modifier.fillMaxWidth()) {
                     Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center) {
-                        artwork()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(340.dp),
+                        contentAlignment = Alignment.BottomStart) {
+                        if (imageURL.isNotBlank()) {
+                            AsyncImage(
+                                model = imageURL,
+                                contentDescription = title,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop)
+                        } else if (imageResource != null) {
+                            androidx.compose.foundation.Image(
+                                painter = painterResource(imageResource),
+                                contentDescription = title,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop)
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color(0xFF2A2A2A)))
+                        }
+                        // Scrim keeps the oversized title legible over any artwork
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        0.45f to Color.Transparent,
+                                        1f to Color(0xFF121212))))
+                        Text(
+                            text = title,
+                            style = AppTheme.typography.headlineLarge.copy(
+                                fontSize = 40.sp,
+                                lineHeight = 44.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = 12.dp))
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        metadata()
-                        ownerInfo()
-                        actions()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (description.isNotBlank()) {
+                            Text(
+                                text = description,
+                                style = AppTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                color = SpotifyTokens.Muted,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(
+                            text = ownerName,
+                            style = AppTheme.typography.bodyMedium.copy(
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
+                            maxLines = 1)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            if (showFollowButton) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, SpotifyTokens.Outline, CircleShape)
+                                        .clickable(onClick = onFollowClick),
+                                    contentAlignment = Alignment.Center) {
+                                    MillenniumIcon(
+                                        imageVector = if (isFollowing) Iconsax.SpotifyHeart else Iconsax.IconsaxHeart,
+                                        contentDescription = stringResource(
+                                            if (isFollowing) {
+                                                Res.string.collection_details_unfollow
+                                            } else {
+                                                Res.string.collection_details_follow
+                                            }),
+                                        modifier = Modifier.size(20.dp),
+                                        tint = if (isFollowing) SpotifyTokens.Green else Color.White)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .clickable(onClick = onShufflePlay),
+                                contentAlignment = Alignment.Center) {
+                                MillenniumIcon(
+                                    imageVector = Iconsax.SpotifyShuffle,
+                                    contentDescription = stringResource(Res.string.collection_details_shuffle_play),
+                                    modifier = Modifier.size(24.dp),
+                                    tint = SpotifyTokens.Green)
+                            }
+                            Spacer(Modifier.weight(1f))
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(SpotifyTokens.Green)
+                                    .clickable(onClick = onPlay),
+                                contentAlignment = Alignment.Center) {
+                                MillenniumIcon(
+                                    imageVector = if (isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
+                                    contentDescription = stringResource(
+                                        if (isPlaying) {
+                                            Res.string.player_pause_content_description
+                                        } else {
+                                            Res.string.player_play_content_description
+                                        }),
+                                    modifier = Modifier.size(24.dp),
+                                    tint = Color.Black)
+                            }
+                        }
                     }
-                    playPauseButton()
                 }
             } else {
                 Row(

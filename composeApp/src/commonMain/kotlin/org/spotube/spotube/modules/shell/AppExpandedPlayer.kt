@@ -508,7 +508,7 @@ fun AppExpandedPlayer(
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.84f)
+                        .fillMaxWidth()
                         .aspectRatio(1f)
                         .then(albumArtModifier)
                         .clip(RoundedCornerShape(8.dp))
