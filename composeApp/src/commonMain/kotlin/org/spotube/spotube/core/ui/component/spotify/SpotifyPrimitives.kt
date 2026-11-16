@@ -129,24 +129,22 @@ fun SpotifyChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val borderWidth = 1.dp
-    val borderColor = if (selected) Color.Transparent else SpotifyTokens.Outline
-    val background = if (selected) SpotifyTokens.Green else Color.Transparent
+    val background = if (selected) SpotifyTokens.Green else SpotifyTokens.Highlight
     Box(
         modifier = modifier
             .height(32.dp)
             .clip(RoundedCornerShape(1500.dp)) // fully rounded pill
             .background(background)
-            .border(borderWidth, borderColor, RoundedCornerShape(1500.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            style = AppTheme.typography.labelMedium.copy(
+            style = AppTheme.typography.labelLarge.copy(
                 color = if (selected) Color.Black else Color.White,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                fontSize = 14.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
             ),
             maxLines = 1,
             overflow = TextOverflow.Clip
@@ -400,12 +398,12 @@ fun SpotifySectionHeader(
         Text(
             text = title,
             style = AppTheme.typography.headlineSmall.copy(
-                fontSize = 24.sp,
-                lineHeight = 28.sp,
+                fontSize = 28.sp,
+                lineHeight = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             ),
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
         if (!subtitle.isNullOrBlank()) {

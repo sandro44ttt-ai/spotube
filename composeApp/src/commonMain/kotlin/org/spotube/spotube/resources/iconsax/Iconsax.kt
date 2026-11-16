@@ -9,11 +9,54 @@ import androidx.compose.ui.unit.dp
 
 object Iconsax {
     // Spotify 9.2.0.2053 icons mapped to existing Iconsax icons
-    val SpotifyPlay: ImageVector
-        get() = IconsaxPlay
 
+    /** Exact Spotify play glyph (`encore_icon_play_24`): sharp triangle. */
+    val SpotifyPlay: ImageVector
+        get() {
+            if (_SpotifyPlay != null) return _SpotifyPlay!!
+            _SpotifyPlay = ImageVector.Builder(
+                name = "SpotifyPlay",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "m7.05,3.606 l13.49,7.788a0.7,0.7 0,0 1,0 1.212L7.05,20.394A0.7,0.7 0,0 1,6 19.788V4.212a0.7,0.7 0,0 1,1.05 -0.606"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyPlay!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyPlay: ImageVector? = null
+
+    /** Exact Spotify pause glyph (`encore_icon_pause_24`): two sharp bars. */
     val SpotifyPause: ImageVector
-        get() = IconsaxPause
+        get() {
+            if (_SpotifyPause != null) return _SpotifyPause!!
+            _SpotifyPause = ImageVector.Builder(
+                name = "SpotifyPause",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M5.7,3a0.7,0.7 0,0 0,-0.7 0.7v16.6a0.7,0.7 0,0 0,0.7 0.7h2.6a0.7,0.7 0,0 0,0.7 -0.7L9,3.7a0.7,0.7 0,0 0,-0.7 -0.7zM15.7,3a0.7,0.7 0,0 0,-0.7 0.7v16.6a0.7,0.7 0,0 0,0.7 0.7h2.6a0.7,0.7 0,0 0,0.7 -0.7L19,3.7a0.7,0.7 0,0 0,-0.7 -0.7z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyPause!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyPause: ImageVector? = null
 
     val SpotifySkipNext: ImageVector
         get() = IconsaxNext

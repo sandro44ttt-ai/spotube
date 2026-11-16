@@ -124,23 +124,6 @@ fun PlayableCard(
                         ),
                     shape = RoundedCornerShape(8.dp)
                 )
-
-                if (onPlay != null)
-                    Box(
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f).padding(8.dp),
-                        contentAlignment = Alignment.BottomEnd
-                    ) {
-                        this@Column.AnimatedVisibility(
-                            visible = highlighted || touchInput || isPlaying || playLoading,
-                            enter = fadeIn(),
-                            exit = fadeOut()
-                        ) {
-                            SpotifyPlayButtonSmall(
-                                isPlaying = isPlaying,
-                                onClick = onPlay
-                            )
-                        }
-                    }
             }
             Column(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)

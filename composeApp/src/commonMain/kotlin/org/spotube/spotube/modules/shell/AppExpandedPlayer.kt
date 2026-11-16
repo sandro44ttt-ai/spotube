@@ -638,16 +638,16 @@ fun AppExpandedPlayer(
                     }
                     Box(
                         modifier = Modifier
-                            .size(64.dp)
+                            .size(72.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .clickable(onClick = ::onPlayPause),
                         contentAlignment = Alignment.Center
                     ) {
                         MillenniumIcon(
-                            if (playerUiState.isPlaying) Iconsax.IconsaxPause else Iconsax.IconsaxPlay,
+                            if (playerUiState.isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
                             contentDescription = stringResource(if (playerUiState.isPlaying) Res.string.player_pause_content_description else Res.string.player_play_content_description),
-                            modifier = Modifier.size(32.dp),
+                            modifier = Modifier.size(30.dp),
                             tint = Color.Black
                         )
                     }

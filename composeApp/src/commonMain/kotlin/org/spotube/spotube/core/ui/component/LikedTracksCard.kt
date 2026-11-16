@@ -148,18 +148,6 @@ fun LikedTracksCard(
                         ),
                     contentScale = ContentScale.Crop
                 )
-
-                Box(
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).padding(8.dp),
-                    contentAlignment = Alignment.BottomEnd
-                ) {
-                    if (isHovered || touchInput || isPlaying || playLoading || addToQueueLoading) {
-                        SpotifyPlayButtonSmall(
-                            isPlaying = isPlaying,
-                            onClick = onPlay
-                        )
-                    }
-                }
             }
             Column(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)

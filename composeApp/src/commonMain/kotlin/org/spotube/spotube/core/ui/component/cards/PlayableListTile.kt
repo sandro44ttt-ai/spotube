@@ -85,12 +85,12 @@ fun PlayableListTile(
         shape = RoundedCornerShape(0.dp),
         borderWidth = 0.dp,
         borderColor = Color.Transparent,
-        contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-        minimumHeight = 64.dp,
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 8.dp),
+        minimumHeight = 88.dp,
         leading = {
             MediaArtwork(
                 imageModel, title,
-                Modifier.size(48.dp).sharedElementOrNone(
+                Modifier.size(64.dp).sharedElementOrNone(
                     sharedElementKey,
                     LocalSharedTransitionScope.current,
                     LocalAnimatedVisibilityScope.current
@@ -102,8 +102,8 @@ fun PlayableListTile(
             TextWithShimmer(
                 title,
                 style = AppTheme.typography.titleMedium.copy(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Medium,
                     color = titleColor
                 ),
                 maxLines = 1,
@@ -115,7 +115,7 @@ fun PlayableListTile(
                 TextWithShimmer(
                     text,
                     style = AppTheme.typography.bodyMedium.copy(
-                        fontSize = 13.sp,
+                        fontSize = 16.sp,
                         color = subtitleColor
                     ),
                     maxLines = 1,

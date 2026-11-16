@@ -174,7 +174,7 @@ internal fun LibraryToolbarTitle(
     } else if (!expandedDesktop) {
         Text(
             text = stringResource(if (compactDesktop) Res.string.library_toolbar_compact_title else Res.string.library_screen_title),
-            style = AppTheme.typography.headlineSmall.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White),
+            style = AppTheme.typography.headlineSmall.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
