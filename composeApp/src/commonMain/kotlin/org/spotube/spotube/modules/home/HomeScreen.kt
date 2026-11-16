@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -60,6 +62,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composeunstyled.currentWindowWidthBreakpoint
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
 import org.spotube.plugin_interfaces.plugin_apis.metadata.browse.MetadataBrowseGenre
 import org.spotube.plugin_interfaces.plugin_apis.metadata.browse.MetadataBrowseItem
 import org.spotube.plugin_interfaces.plugin_apis.metadata.browse.MetadataBrowseSection
@@ -75,6 +80,13 @@ import org.spotube.spotube.core.ui.component.FeaturedCarousel
 import org.spotube.spotube.core.ui.component.VerticalScrollbar
 import org.spotube.spotube.core.ui.component.cards.PlayableCard
 import org.spotube.spotube.core.ui.component.dragScrollable
+import org.spotube.spotube.core.ui.component.spotify.SpotifyChip
+import org.spotube.spotube.core.ui.component.spotify.SpotifyGreetingHeader
+import org.spotube.spotube.core.ui.component.spotify.SpotifySectionHeader
+import org.spotube.spotube.core.ui.component.spotify.SpotifyShortcutTile
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTopBarIcon
+import org.spotube.spotube.core.ui.component.spotify.spotifyGreetingKey
 import org.spotube.spotube.core.ui.misc.SkeletonTree
 import org.spotube.spotube.core.navigation.NavigationCommands
 import org.spotube.spotube.core.navigation.Routes
@@ -92,10 +104,16 @@ import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.support_button_label
 import spotube.composeapp.generated.resources.devices_title
 import spotube.composeapp.generated.resources.jam_screen_title
+import spotube.composeapp.generated.resources.settings_screen_title
+import spotube.composeapp.generated.resources.spotify_greeting_afternoon
+import spotube.composeapp.generated.resources.spotify_greeting_evening
+import spotube.composeapp.generated.resources.spotify_greeting_morning
+import spotube.composeapp.generated.resources.spotify_filter_all
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.spotube.millennium.adaptive.WindowBreakpoints
 import org.spotube.spotube.resources.iconsax.IconsaxMirrorScreenRegular
+import org.spotube.spotube.resources.iconsax.IconsaxSetting2
 
 @Composable
 fun HomeScreen(viewModel: HomeScreenViewModel) {
@@ -136,51 +154,30 @@ fun HomeScreen(viewModel: HomeScreenViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MillenniumTheme.colors.background)
-    ) {
-        ApplicationMainBar(
-            backButton = false,
-            title = {
-                Text(
-                    "Spotube",
-                    style = AppTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = AppTheme.colors.onSurface
+            .background(
+                Brush.verticalGradient(
+                    0f to SpotifyTokens.Elevated,
+                    0.35f to SpotifyTokens.Base,
+                    1f to SpotifyTokens.Base
                 )
-            },
-            actions = {
-                if (isSmallScreen) {
-                    MillenniumIconButton(
-                        onClick = { navigationCommands.navigateTo(Routes.Devices) },
-                        style = MillenniumIconButtonStyle.Quiet
-                    ) {
-                        MillenniumIcon(
-                            imageVector = Iconsax.IconsaxMirrorScreenRegular,
-                            contentDescription = stringResource(Res.string.devices_title)
-                        )
-                    }
-                    MillenniumIconButton(
-                        onClick = { navigationCommands.navigateTo(Routes.Jam) },
-                        style = MillenniumIconButtonStyle.Quiet
-                    ) {
-                        MillenniumIcon(
-                            imageVector = Iconsax.IconsaxSoundTwotone,
-                            contentDescription = stringResource(Res.string.jam_screen_title)
-                        )
-                    }
-                    val supportLabel = stringResource(Res.string.support_button_label)
-                    MillenniumIconButton(
-                        onClick = openSupport,
-                        style = MillenniumIconButtonStyle.Quiet
-                    ) {
-                        MillenniumIcon(
-                            imageVector = Iconsax.IconsaxHeart2,
-                            contentDescription = supportLabel
-                        )
-                    }
-                }
-            })
+            )
+    ) {
+        val greetingRes = when (
+            spotifyGreetingKey(
+                Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).hour
+            )
+        ) {
+            0 -> Res.string.spotify_greeting_morning
+            1 -> Res.string.spotify_greeting_afternoon
+            else -> Res.string.spotify_greeting_evening
+        }
+        SpotifyGreetingHeader(greeting = stringResource(greetingRes)) {
+            SpotifyTopBarIcon(
+                icon = Iconsax.IconsaxSetting2,
+                contentDescription = stringResource(Res.string.settings_screen_title),
+                onClick = { navigationCommands.navigateTo(Routes.Settings) }
+            )
+        }
         if (isSmallScreen) {
             ConnectStatusBanner(
                 onOpenRemote = { navigationCommands.navigateTo(Routes.RemoteControl) },
@@ -289,9 +286,10 @@ private fun HomeContent(
             }
 
             is HomeScreenState.Data -> {
-                if (state.featuredItems.isNotEmpty()) {
+                val shortcuts = remember(state.featuredItems) { state.featuredItems.take(6) }
+                if (shortcuts.isNotEmpty()) {
                     item {
-                        FeaturedCarousel(items = state.featuredItems)
+                        SpotifyShortcutGrid(items = shortcuts)
                     }
                 }
 
@@ -392,30 +390,7 @@ private fun HomeSection(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = title,
-                style = AppTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp
-                ),
-                color = AppTheme.colors.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (!subtitle.isNullOrEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = AppTheme.typography.bodySmall,
-                    color = AppTheme.colors.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        SpotifySectionHeader(title = title, subtitle = subtitle)
 
         LazyRow(
             state = rowState,
@@ -444,32 +419,84 @@ private fun GenreTabs(
     onGenreSelected: (String) -> Unit
 ) {
     val rowState = rememberLazyListState()
-    val accent = AppTheme.colors.primary
 
     LazyRow(
         state = rowState,
         modifier = Modifier.dragScrollable(rowState),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(genres) { genre ->
-            val selected = selectedGenreId == genre.id
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .clip(AppTheme.shapes.pill)
-                    .background(if (selected) accent else AppTheme.colors.surfaceVariant)
-                    .clickable { onGenreSelected(genre.id) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            SpotifyChip(
+                text = genre.name,
+                selected = selectedGenreId == genre.id,
+                onClick = { onGenreSelected(genre.id) }
+            )
+        }
+    }
+}
+
+/**
+ * Spotify home shortcut grid: six tiles, two per row, directly under the greeting.
+ */
+@Composable
+private fun SpotifyShortcutGrid(
+    items: List<MetadataBrowseItem>,
+    modifier: Modifier = Modifier
+) {
+    val navigationCommands = koinInject<NavigationCommands>()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = genre.name,
-                    style = AppTheme.typography.labelLarge.copy(
-                        color = if (selected) AppTheme.colors.onPrimary else AppTheme.colors.onSurfaceVariant,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
-                    ),
-                    maxLines = 1
-                )
+                rowItems.forEach { item ->
+                    val title = when (item) {
+                        is MetadataBrowseItem.Album -> item.data.title
+                        is MetadataBrowseItem.Playlist -> item.data.title
+                        is MetadataBrowseItem.Track -> item.data.title
+                        is MetadataBrowseItem.Artist -> item.data.name
+                        is MetadataBrowseItem.User -> item.data.displayName ?: item.data.username
+                    }
+                    val imageUrl = when (item) {
+                        is MetadataBrowseItem.Album -> item.data.thumbnails.firstOrNull()?.url
+                        is MetadataBrowseItem.Playlist -> item.data.thumbnails.firstOrNull()?.url
+                        is MetadataBrowseItem.Track -> (item.data.album?.thumbnails
+                            ?: item.data.thumbnails)?.firstOrNull()?.url
+
+                        is MetadataBrowseItem.Artist -> item.data.thumbnails.firstOrNull()?.url
+                        is MetadataBrowseItem.User -> item.data.thumbnails.firstOrNull()?.url
+                    }
+                    val onClick: (() -> Unit)? = when (item) {
+                        is MetadataBrowseItem.Album -> {
+                            { navigationCommands.navigateTo(Routes.Album(item.data.id)) }
+                        }
+
+                        is MetadataBrowseItem.Playlist -> {
+                            { navigationCommands.navigateTo(Routes.Playlist(item.data.id)) }
+                        }
+
+                        is MetadataBrowseItem.Artist -> {
+                            { navigationCommands.navigateTo(Routes.Artist(item.data.id)) }
+                        }
+
+                        else -> null
+                    }
+                    SpotifyShortcutTile(
+                        title = title,
+                        imageURL = imageUrl,
+                        onClick = onClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowItems.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
         }
     }

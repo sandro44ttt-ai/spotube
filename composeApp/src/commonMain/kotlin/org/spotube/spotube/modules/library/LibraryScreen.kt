@@ -38,7 +38,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composeunstyled.Text
@@ -46,6 +48,8 @@ import com.composeunstyled.currentWindowWidthBreakpoint
 import org.spotube.spotube.getPlatform
 import org.spotube.spotube.isDesktop
 import org.spotube.spotube.core.ui.component.ApplicationMainBar
+import org.spotube.spotube.core.ui.component.spotify.SpotifyChip
+import org.spotube.spotube.core.ui.theming.AppTheme
 import org.spotube.spotube.modules.downloads.DownloadsScreen
 import org.spotube.spotube.modules.library.album.LibraryAlbumsScreen
 import org.spotube.spotube.modules.library.artist.LibraryArtistsScreen
@@ -140,14 +144,15 @@ fun LibraryScreen(libraryState: LibraryState = koinInject()) {
 @Composable
 private fun LibraryTabs(state: LibraryToolbarUiState, onTabSelected: (LibraryTab) -> Unit) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(LibraryTab.entries) { tab ->
-            MillenniumButton(
-                onClick = { onTabSelected(tab) },
-                style = if (state.currentTab == tab) MillenniumButtonStyle.Primary else MillenniumButtonStyle.Secondary
-            ) { Text(stringResource(tab.titleResource)) }
+            SpotifyChip(
+                text = stringResource(tab.titleResource),
+                selected = state.currentTab == tab,
+                onClick = { onTabSelected(tab) }
+            )
         }
     }
 }
@@ -167,7 +172,8 @@ internal fun LibraryToolbarTitle(
         )
     } else if (!expandedDesktop) {
         Text(
-            stringResource(if (compactDesktop) Res.string.library_toolbar_compact_title else Res.string.library_screen_title),
+            text = stringResource(if (compactDesktop) Res.string.library_toolbar_compact_title else Res.string.library_screen_title),
+            style = AppTheme.typography.headlineSmall.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

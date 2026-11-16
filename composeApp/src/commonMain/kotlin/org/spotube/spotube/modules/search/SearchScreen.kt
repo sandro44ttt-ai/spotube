@@ -110,6 +110,7 @@ import org.spotube.spotube.core.ui.component.TrackOptionsState
 import org.spotube.spotube.core.ui.component.UserCard
 import org.spotube.spotube.core.ui.component.cards.PlayableCard
 import org.spotube.spotube.core.ui.component.dragScrollable
+import org.spotube.spotube.core.ui.component.spotify.SpotifyChip
 import org.spotube.spotube.core.ui.misc.SkeletonTree
 import org.spotube.spotube.core.ui.theming.AppTheme
 import org.spotube.spotube.getPlatform
@@ -598,17 +599,11 @@ private fun SearchTabs(
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         items(types) { type ->
-            val isSelected = selectedType == type
-            MillenniumButton(
-                onClick = { onTabSelected(type) },
-                style = if (isSelected) {
-                    MillenniumButtonStyle.Primary
-                } else {
-                    MillenniumButtonStyle.Secondary
-                }
-            ) {
-                Text(type.tabTitle())
-            }
+            SpotifyChip(
+                text = type.tabTitle(),
+                selected = selectedType == type,
+                onClick = { onTabSelected(type) }
+            )
         }
     }
 }

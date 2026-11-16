@@ -74,12 +74,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
@@ -281,7 +284,17 @@ fun AppExpandedPlayer(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize().background(AppTheme.colors.background)) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    0f to Color(0xFF3A3A3A),
+                    0.45f to AppTheme.colors.background,
+                    1f to AppTheme.colors.background
+                )
+            )
+    ) {
         if (playerOptionsUiState.isMoreOptionsSheetOpen) {
             MillenniumModalBottomSheet(
                 state = moreOptionsSheetState,
@@ -498,7 +511,7 @@ fun AppExpandedPlayer(
                         .fillMaxWidth(0.84f)
                         .aspectRatio(1f)
                         .then(albumArtModifier)
-                        .clip(RoundedCornerShape(22.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(AppTheme.colors.surfaceContainerHighest)
                 ) {
                     AsyncImage(
@@ -517,20 +530,19 @@ fun AppExpandedPlayer(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                PlayerHeartButton(
-                    audioPlayerQueue = audioPlayerQueue,
-                    savedTracksViewModel = savedTracksViewModel
-                )
                 Column(
                     modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.Start
                 ) {
                     Text(
                         text = playerUiState.title,
-                        style = AppTheme.typography.headlineSmall,
+                        style = AppTheme.typography.headlineSmall.copy(
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Start
                     )
                     PlayerArtistsText(
                         artists = playerUiState.artistList,
@@ -541,14 +553,24 @@ fun AppExpandedPlayer(
                         },
                         style = AppTheme.typography.bodyLarge,
                         color = AppTheme.colors.onSurfaceVariant,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Start
                     )
                 }
-                MillenniumIconButton(
-                    onClick = onQueue,
-                    style = MillenniumIconButtonStyle.Secondary
-                ) {
-                    MillenniumIcon(Iconsax.IconsaxMusicFilter, contentDescription = stringResource(Res.string.queue_title))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PlayerHeartButton(
+                        audioPlayerQueue = audioPlayerQueue,
+                        savedTracksViewModel = savedTracksViewModel
+                    )
+                    MillenniumIconButton(
+                        onClick = onQueue,
+                        style = MillenniumIconButtonStyle.Quiet
+                    ) {
+                        MillenniumIcon(
+                            Iconsax.IconsaxMusicFilter,
+                            contentDescription = stringResource(Res.string.queue_title),
+                            tint = Color.White
+                        )
+                    }
                 }
             }
 
@@ -614,15 +636,19 @@ fun AppExpandedPlayer(
                     ) {
                         MillenniumIcon(Iconsax.IconsaxPrevious, contentDescription = stringResource(Res.string.player_previous_content_description))
                     }
-                    MillenniumIconButton(
-                        onClick = ::onPlayPause,
-                        style = MillenniumIconButtonStyle.Primary
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .clickable(onClick = ::onPlayPause),
+                        contentAlignment = Alignment.Center
                     ) {
                         MillenniumIcon(
                             if (playerUiState.isPlaying) Iconsax.IconsaxPause else Iconsax.IconsaxPlay,
                             contentDescription = stringResource(if (playerUiState.isPlaying) Res.string.player_pause_content_description else Res.string.player_play_content_description),
-                            modifier = Modifier.size(30.dp),
-                            tint = LocalTextStyle.current.color
+                            modifier = Modifier.size(32.dp),
+                            tint = Color.Black
                         )
                     }
                     MillenniumIconButton(

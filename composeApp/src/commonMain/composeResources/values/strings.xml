@@ -16,6 +16,10 @@
   -->
 
 <resources>
+    <string name="spotify_greeting_morning">Good morning</string>
+    <string name="spotify_greeting_afternoon">Good afternoon</string>
+    <string name="spotify_greeting_evening">Good evening</string>
+    <string name="spotify_filter_all">All</string>
     <string name="queue_title">Queue</string>
     <string name="queue_clear_queue">Clear Queue</string>
     <string name="queue_filter_queue">Filter queue...</string>

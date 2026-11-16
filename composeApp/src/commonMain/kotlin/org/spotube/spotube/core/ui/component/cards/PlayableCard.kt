@@ -183,15 +183,15 @@ fun PlayableCard(
                     }
             }
             Column(
-                modifier = Modifier.fillMaxWidth().padding(12.dp)
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             ) {
                 TextWithShimmer(
                     text = title,
-                    style = AppTheme.typography.titleSmall,
+                    style = AppTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 subtitle?.let {
                     TextWithShimmer(
                         text = subtitle,
