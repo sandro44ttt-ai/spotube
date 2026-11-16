@@ -57,8 +57,6 @@ import org.spotube.millennium.composables.MillenniumIconButtonStyle
 import org.spotube.spotube.core.ui.theming.AppTheme
 import org.spotube.spotube.resources.iconsax.Iconsax
 import org.spotube.spotube.resources.iconsax.IconsaxMusic
-import org.spotube.spotube.resources.iconsax.IconsaxPause
-import org.spotube.spotube.resources.iconsax.IconsaxPlay
 
 /**
  * Raw values taken from the Spotify 9.2.0.2053 resource table
@@ -268,7 +266,7 @@ fun SpotifyPlayButton(
         contentAlignment = Alignment.Center
     ) {
         MillenniumIcon(
-            imageVector = if (isPlaying) Iconsax.IconsaxPause else Iconsax.IconsaxPlay,
+            imageVector = if (isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
             contentDescription = null,
             modifier = Modifier.size(glyphSize),
             tint = Color.Black

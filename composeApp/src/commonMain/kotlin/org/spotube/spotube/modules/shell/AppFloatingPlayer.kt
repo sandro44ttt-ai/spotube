@@ -18,23 +18,15 @@
 package org.spotube.spotube.modules.shell
 
 
-import org.spotube.millennium.composables.MillenniumIcon
-import org.spotube.millennium.composables.MillenniumIconButton
-import org.spotube.millennium.composables.MillenniumIconButtonStyle
-import org.spotube.millennium.composables.MillenniumProgress
-import org.spotube.millennium.theme.millenniumSurface
-import org.spotube.millennium.theme.MillenniumTheme
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,7 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 
 import org.spotube.spotube.core.ui.theming.AppTheme
 import com.composeunstyled.Text
@@ -59,12 +51,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import org.spotube.spotube.core.audioplayer.AudioPlayerQueue
+import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.modules.saved_tracks.SavedTracksViewModel
 import org.spotube.spotube.modules.saved_tracks.SAVED_TRACKS_COLLECTION_ID
 import org.spotube.spotube.resources.iconsax.Iconsax
-import org.spotube.spotube.resources.iconsax.IconsaxPause
-import org.spotube.spotube.resources.iconsax.IconsaxPlay
 import org.spotube.spotube.resources.iconsax.IconsaxMusic
 import org.jetbrains.compose.resources.stringResource
 import spotube.composeapp.generated.resources.Res
@@ -76,6 +67,7 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
+import androidx.compose.ui.text.font.FontWeight
 
 /**
  * Spotify 9.2 floating mini player.
@@ -209,24 +201,12 @@ internal fun FloatingPlayerContent(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clickable(
-                                enabled = playerUiState.queue.isNotEmpty(),
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onPlayPause
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        MillenniumIcon(
-                            imageVector = if (playerUiState.isPlaying) Iconsax.IconsaxPause else Iconsax.IconsaxPlay,
-                            contentDescription = stringResource(if (playerUiState.isPlaying) Res.string.player_pause_content_description else Res.string.player_play_content_description),
-                            modifier = Modifier.size(24.dp),
-                            tint = Color.White
-                        )
-                    }
+                    // 40dp play button (now_playing_bar_actions_button_size)
+                    SpotifyPlayButton(
+                        isPlaying = playerUiState.isPlaying,
+                        onClick = onPlayPause,
+                        size = 40.dp
+                    )
                 }
 
                 // 2dp progress line welded to the bottom edge of the pill.
