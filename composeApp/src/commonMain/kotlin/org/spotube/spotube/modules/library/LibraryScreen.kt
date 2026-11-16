@@ -145,7 +145,7 @@ fun LibraryScreen(libraryState: LibraryState = koinInject()) {
 @Composable
 private fun LibraryTabs(state: LibraryToolbarUiState, onTabSelected: (LibraryTab) -> Unit) {
     LazyRow(
-        contentPadding = PaddingValues(start = 8.dp, end = 16.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(LibraryTab.entries) { tab ->
