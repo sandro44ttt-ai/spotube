@@ -274,13 +274,13 @@ fun SpotifyPlayButton(
     }
 }
 
-/** Small play button for cards/grid (32dp container, 16dp glyph). */
+/** Small play button for cards/grid (48dp container, 24dp glyph), matching Spotify cards. */
 @Composable
 fun SpotifyPlayButtonSmall(
     isPlaying: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) = SpotifyPlayButton(isPlaying, onClick, modifier, 32.dp)
+) = SpotifyPlayButton(isPlaying, onClick, modifier, 48.dp)
 
 /** Very small play button for list rows (23dp container, 12dp glyph, 48dp touch target). */
 @Composable

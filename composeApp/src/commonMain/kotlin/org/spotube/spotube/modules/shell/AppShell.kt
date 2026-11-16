@@ -387,6 +387,7 @@ internal fun CompactPlayerOverlay(
                         expandedPlayer(
                             Modifier
                                 .fillMaxSize()
+                                .zeroSizeUnless(expandedPlayerVisible)
                                 .graphicsLayer {
                                     alpha = viewModel.compactSheetUiState(progress).expandedPlayerAlpha
                                 },

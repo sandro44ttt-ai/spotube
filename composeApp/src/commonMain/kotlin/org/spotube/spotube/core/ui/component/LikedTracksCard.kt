@@ -140,7 +140,7 @@ fun LikedTracksCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .sharedElementOrNone(
                             key = "saved_tracks_art",
                             sharedTransitionScope = sharedTransitionScope,

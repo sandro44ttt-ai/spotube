@@ -85,8 +85,8 @@ fun AppBottombar(
     }
     val tabs = remember {
         listOf(
-            SpotifyTab(Res.string.nav_home, Iconsax.IconsaxHome, Routes.Home),
-            SpotifyTab(Res.string.nav_search, Iconsax.IconsaxSearch, Routes.Search),
+            SpotifyTab(Res.string.nav_home, Iconsax.SpotifyHomeGlyph, Routes.Home),
+            SpotifyTab(Res.string.nav_search, Iconsax.SpotifySearchGlyph, Routes.Search),
             SpotifyTab(Res.string.library_toolbar_compact_title, Iconsax.SpotifyLibrary, Routes.Library)
         )
     }

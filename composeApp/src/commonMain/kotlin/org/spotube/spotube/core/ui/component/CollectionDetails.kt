@@ -42,6 +42,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 
 import org.spotube.spotube.core.ui.theming.AppTheme
 import com.composeunstyled.Text
@@ -50,8 +52,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import org.spotube.spotube.core.ui.misc.TextWithShimmer
 import org.spotube.spotube.core.ui.misc.shimmerApply
@@ -98,7 +102,15 @@ fun CollectionDetails(
     showFollowButton: Boolean = true,
     onEdit: (() -> Unit)? = null,
     sharedElementKey: String? = null) {
-    Box(modifier = modifier.fillMaxWidth()) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF2A2A2A), Color(0xFF121212))
+                )
+            )
+    ) {
         val isCompact = currentWindowWidthBreakpoint() isBelow WindowBreakpoints.Medium
 
         val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -228,7 +240,7 @@ fun CollectionDetails(
         val artwork = @Composable {
             Box(
                 modifier = Modifier
-                    .size(if (isCompact) 100.dp else 200.dp)
+                    .size(if (isCompact) 192.dp else 200.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .sharedElementOrNone(
                         key = sharedElementKey,
@@ -261,14 +273,22 @@ fun CollectionDetails(
             Column {
                 TextWithShimmer(
                     text = title,
-                    style = if (isCompact) AppTheme.typography.bodyLarge else AppTheme.typography.headlineLarge,
-                    maxLines = 1,
+                    style = if (isCompact) {
+                        AppTheme.typography.headlineSmall.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        AppTheme.typography.headlineLarge
+                    },
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis)
 
                 if (description.isNotBlank()) {
                     TextWithShimmer(
                         text = description,
-                        style = if (isCompact) AppTheme.typography.labelSmall else AppTheme.typography.bodyMedium,
+                        style = if (isCompact) {
+                            AppTheme.typography.bodyMedium.copy(fontSize = 13.sp)
+                        } else {
+                            AppTheme.typography.bodyMedium
+                        },
                         color = AppTheme.colors.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
@@ -286,18 +306,15 @@ fun CollectionDetails(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
+                    Box(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
+                        contentAlignment = Alignment.Center) {
                         artwork()
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            metadata()
-                            ownerInfo()
-                            actions()
-                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        metadata()
+                        ownerInfo()
+                        actions()
                     }
                     playPauseButton()
                 }

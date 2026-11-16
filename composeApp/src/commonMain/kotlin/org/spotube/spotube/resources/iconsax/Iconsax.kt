@@ -70,7 +70,54 @@ object Iconsax {
         get() = IconsaxRefreshRight
 
     val SpotifyHome: ImageVector
-        get() = IconsaxHome
+        get() = SpotifyHomeGlyph
+
+    val SpotifySearchGlyph: ImageVector
+        get() {
+            if (_SpotifySearchGlyph != null) return _SpotifySearchGlyph!!
+            _SpotifySearchGlyph = ImageVector.Builder(
+                name = "SpotifySearchGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M10.533,1.279C5.352,1.279 1.126,5.419 1.126,10.558C1.126,15.697 5.352,19.837 10.533,19.837C12.767,19.837 14.823,19.067 16.44,17.779L20.793,22.132C21.183,22.523 21.817,22.523 22.207,22.132C22.598,21.742 22.598,21.108 22.207,20.718L17.863,16.374C19.162,14.785 19.94,12.763 19.94,10.558C19.94,5.419 15.714,1.279 10.533,1.279ZM3.126,10.558C3.126,6.552 6.428,3.279 10.533,3.279C14.638,3.279 17.94,6.552 17.94,10.558C17.94,14.564 14.638,17.837 10.533,17.837C6.428,17.837 3.126,14.564 3.126,10.558Z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifySearchGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifySearchGlyph: ImageVector? = null
+
+    /** Exact Spotify home glyph (`encore_icon_home_24`). */
+    val SpotifyHomeGlyph: ImageVector
+        get() {
+            if (_SpotifyHomeGlyph != null) return _SpotifyHomeGlyph!!
+            _SpotifyHomeGlyph = ImageVector.Builder(
+                name = "SpotifyHomeGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M12.5,3.247a1,1 0,0 0,-1 0L4,7.577L4,20h4.5v-6a1,1 0,0 1,1 -1h5a1,1 0,0 1,1 1v6L20,20L20,7.577zM10.5,1.515a3,3 0,0 1,3 0l7.5,4.33a2,2 0,0 1,1 1.732L22,21a1,1 0,0 1,-1 1h-6.5a1,1 0,0 1,-1 -1v-6h-3v6a1,1 0,0 1,-1 1L3,22a1,1 0,0 1,-1 -1L2,7.577a2,2 0,0 1,1 -1.732z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyHomeGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyHomeGlyph: ImageVector? = null
 
     val SpotifySettings: ImageVector
         get() = IconsaxSetting

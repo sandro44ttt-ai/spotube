@@ -202,6 +202,7 @@ internal fun FloatingPlayerContent(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                    heartButton()
                     // Spotify mini player uses a plain white play/pause glyph (no green circle).
                     Box(
                         modifier = Modifier
