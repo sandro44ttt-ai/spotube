@@ -286,7 +286,7 @@ private fun HomeContent(
             }
 
             is HomeScreenState.Data -> {
-                val shortcuts = remember(state.featuredItems) { state.featuredItems.take(6) }
+                val shortcuts = state.featuredItems.take(6)
                 if (shortcuts.isNotEmpty()) {
                     item {
                         SpotifyShortcutGrid(items = shortcuts)
