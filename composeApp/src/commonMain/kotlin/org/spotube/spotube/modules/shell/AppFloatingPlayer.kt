@@ -79,11 +79,11 @@ import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
 
 /**
  * Spotify 9.2 floating mini player.
- * `floating_layout_bg`: 56dp tall pill, 8dp radius, gray_15 (#282828) fill,
+ * `floating_now_playing_bar_content_size`: 56dp tall pill, 8dp radius, gray_15 (#282828) fill,
  * 8dp side/bottom margin, 8dp content padding, 40dp artwork, 2dp progress line
  * pinned to the bottom edge (now_playing_bar.xml).
  */
-internal val FloatingPlayerContentHeight = 64.dp
+internal val FloatingPlayerContentHeight = 56.dp
 
 // The floating player on small screens that appears above the floating AppBottombar
 //

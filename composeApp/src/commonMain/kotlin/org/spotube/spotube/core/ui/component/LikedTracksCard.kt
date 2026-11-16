@@ -67,7 +67,7 @@ import spotube.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import org.spotube.spotube.core.ui.component.cards.PlayableListTile
 import org.spotube.spotube.core.ui.component.cards.MediaCardSurface
-import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButtonSmall
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
@@ -154,10 +154,9 @@ fun LikedTracksCard(
                     contentAlignment = Alignment.BottomEnd
                 ) {
                     if (isHovered || touchInput || isPlaying || playLoading || addToQueueLoading) {
-                        SpotifyPlayButton(
+                        SpotifyPlayButtonSmall(
                             isPlaying = isPlaying,
-                            onClick = onPlay,
-                            modifier = Modifier.size(48.dp)
+                            onClick = onPlay
                         )
                     }
                 }

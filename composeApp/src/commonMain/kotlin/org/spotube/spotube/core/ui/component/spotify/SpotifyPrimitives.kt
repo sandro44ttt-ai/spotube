@@ -121,8 +121,8 @@ object SpotifyTokens {
 
 /**
  * Spotify filter chip, from `res/drawable/chip_button_background.xml`:
- * 32dp tall, fully rounded, transparent with a 1dp gray outline when unselected,
- * dark green fill with a bright green outline when selected.
+ * 32dp tall, fully rounded (pill), transparent with a 1dp gray outline when unselected,
+ * dark green fill with a bright green 1.5dp outline when selected.
  */
 @Composable
 fun SpotifyChip(
@@ -131,14 +131,15 @@ fun SpotifyChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val borderWidth = if (selected) 1.5.dp else 1.dp
     val borderColor = if (selected) SpotifyTokens.Green else SpotifyTokens.Outline
     val background = if (selected) SpotifyTokens.GreenDark else Color.Transparent
     Box(
         modifier = modifier
             .height(32.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(1500.dp)) // fully rounded pill
             .background(background)
-            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+            .border(borderWidth, borderColor, RoundedCornerShape(1500.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center
@@ -250,8 +251,13 @@ fun SpotifyPlayButton(
     isPlaying: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 48.dp
+    size: androidx.compose.ui.unit.Dp = 52.dp
 ) {
+    val glyphSize = when {
+        size >= 48.dp -> 24.dp   // large: 24dp glyph in 52dp circle
+        size >= 28.dp -> 16.dp   // card: 16dp glyph in 32dp circle
+        else -> 12.dp            // list row: 12dp glyph in 23dp circle
+    }
     Box(
         modifier = modifier
             .size(size)
@@ -264,11 +270,27 @@ fun SpotifyPlayButton(
         MillenniumIcon(
             imageVector = if (isPlaying) Iconsax.IconsaxPause else Iconsax.IconsaxPlay,
             contentDescription = null,
-            modifier = Modifier.size(size * 0.5f),
+            modifier = Modifier.size(glyphSize),
             tint = Color.Black
         )
     }
 }
+
+/** Small play button for cards/grid (32dp container, 16dp glyph). */
+@Composable
+fun SpotifyPlayButtonSmall(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) = SpotifyPlayButton(isPlaying, onClick, modifier, 32.dp)
+
+/** Very small play button for list rows (23dp container, 12dp glyph, 48dp touch target). */
+@Composable
+fun SpotifyPlayButtonList(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) = SpotifyPlayButton(isPlaying, onClick, modifier.size(48.dp).clip(CircleShape).background(Color.Transparent), 23.dp)
 
 /** Spotify shelf title: 24sp bold, 16dp leading padding. */
 @Composable

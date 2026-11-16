@@ -57,6 +57,7 @@ import org.spotube.spotube.resources.iconsax.IconsaxAddSquare
 import org.spotube.spotube.resources.iconsax.IconsaxPause
 import org.spotube.spotube.resources.iconsax.IconsaxPlay
 import org.jetbrains.compose.resources.stringResource
+import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButtonSmall
 import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.player_add_to_queue_content_description
 import spotube.composeapp.generated.resources.player_pause_content_description
@@ -113,72 +114,29 @@ fun PlayableCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(4.dp))
                         .sharedElementOrNone(
                             key = sharedElementKey,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope
                         ),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(4.dp)
                 )
 
-                if (onPlay != null || onAddToQueue != null)
+                if (onPlay != null)
                     Box(
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f).padding(8.dp),
                         contentAlignment = Alignment.BottomEnd
                     ) {
                         this@Column.AnimatedVisibility(
-                            visible = highlighted || touchInput || (isPlaying && onPlay != null) ||
-                                playLoading || addToQueueLoading,
+                            visible = highlighted || touchInput || isPlaying || playLoading,
                             enter = fadeIn(),
                             exit = fadeOut()
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(4.dp)
-                            ) {
-                                // While this collection is playing the play/pause toggle stays
-                                // visible and the add-to-queue action is hidden entirely.
-                                onAddToQueue?.takeIf { !isPlaying }?.let {
-                                    MillenniumIconButton(
-                                        onClick = onAddToQueue,
-                                        loading = addToQueueLoading,
-                                        modifier = Modifier.size(34.dp),
-                                        style = MillenniumIconButtonStyle.Secondary
-                                    ) {
-                                        MillenniumIcon(
-                                            imageVector = Iconsax.IconsaxAddSquare,
-                                            contentDescription = stringResource(
-                                                Res.string.player_add_to_queue_content_description
-                                            ),
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                }
-                                onPlay?.let {
-                                    MillenniumIconButton(
-                                        onClick = onPlay,
-                                        loading = playLoading,
-                                        modifier = Modifier.size(34.dp),
-                                        style = MillenniumIconButtonStyle.Primary
-
-                                    ) {
-                                        MillenniumIcon(
-                                            imageVector = if (isPlaying) {
-                                                Iconsax.IconsaxPause
-                                            } else Iconsax.IconsaxPlay,
-                                            contentDescription = stringResource(
-                                                if (isPlaying) {
-                                                    Res.string.player_pause_content_description
-                                                } else {
-                                                    Res.string.player_play_content_description
-                                                }
-                                            ),
-                                            tint = LocalTextStyle.current.color
-                                        )
-                                    }
-                                }
-                            }
+                            SpotifyPlayButtonSmall(
+                                isPlaying = isPlaying,
+                                onClick = onPlay
+                            )
                         }
                     }
             }

@@ -33,6 +33,7 @@ import org.spotube.spotube.core.ui.component.LocalSharedTransitionScope
 import org.spotube.spotube.core.ui.component.sharedElementOrNone
 import org.spotube.spotube.core.ui.component.spotify.SpotifyIconButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButtonList
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.misc.TextWithShimmer
 import org.spotube.spotube.core.ui.misc.shimmerApply
@@ -138,10 +139,9 @@ fun PlayableListTile(
                         )
                     }
                     if (onPlay != null) {
-                        SpotifyPlayButton(
+                        SpotifyPlayButtonList(
                             isPlaying = isPlaying,
-                            onClick = onPlay,
-                            modifier = Modifier.size(48.dp)
+                            onClick = onPlay
                         )
                     }
                 }
