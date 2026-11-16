@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.millennium.composables.MillenniumBottomNavigationBarTheme
 import org.spotube.millennium.composables.MillenniumBottomNavigationBarThemeProperties
 import org.spotube.millennium.composables.MillenniumBottomNavigationItemThemeProperties
@@ -279,20 +280,24 @@ private fun spotifyMillenniumComponents(
         innerGlowColor = accentTop.copy(alpha = 0.3f)
     )
 
-    // --- Buttons (Spotify: Primary = green pill with black text, Secondary = outline, Quiet = ghost) ---
+    // --- Buttons (Spotify: flat green pill, black 16sp bold label, no glow/shadow) ---
     val btnPrimary = MillenniumButtonThemeProperties(
-        background = Brush.verticalGradient(0f to accent, 1f to accentPress),
+        background = Brush.verticalGradient(0f to accent, 1f to accent),
         foreground = onAccent,
-        textStyle = AppDefaultTypography.labelLarge.copy(fontWeight = FontWeight.SemiBold, color = onAccent),
+        textStyle = AppDefaultTypography.labelLarge.copy(
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = onAccent
+        ),
         shape = AppDefaultShapes.pill,
-        padding = PaddingValues(24.dp, 24.dp, 12.dp, 12.dp),
+        padding = PaddingValues(horizontal = 32.dp, vertical = 12.dp),
         contentSpacing = 8.dp,
         minSize = DpSize(64.dp, 48.dp),
         borderWidth = 0.dp,
         borderColor = Color.Transparent,
         shadows = listOf(Color.Transparent),
         shadowElevation = 0.dp,
-        innerGlowColor = accentTop.copy(alpha = 0.2f),
+        innerGlowColor = Color.Transparent,
         innerGlowWidth = 0.dp,
         innerGlowInset = 0.dp,
         innerGlowTop = 0.dp,
@@ -304,9 +309,15 @@ private fun spotifyMillenniumComponents(
     val btnSecondary = btnPrimary.copy(
         background = Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Transparent),
         foreground = text,
-        textStyle = AppDefaultTypography.labelLarge.copy(fontWeight = FontWeight.SemiBold, color = text),
+        textStyle = AppDefaultTypography.labelLarge.copy(
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = text
+        ),
+        padding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+        minSize = DpSize(48.dp, 32.dp),
         borderWidth = 1.dp,
-        borderColor = border,
+        borderColor = SpotifyTokens.Outline,
         innerGlowColor = Color.Transparent
     )
     val btnQuiet = btnSecondary.copy(

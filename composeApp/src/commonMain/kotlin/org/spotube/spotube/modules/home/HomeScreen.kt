@@ -156,7 +156,7 @@ fun HomeScreen(viewModel: HomeScreenViewModel) {
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    0f to SpotifyTokens.Elevated,
+                    0f to SpotifyTokens.Sheet,
                     0.35f to SpotifyTokens.Base,
                     1f to SpotifyTokens.Base
                 )

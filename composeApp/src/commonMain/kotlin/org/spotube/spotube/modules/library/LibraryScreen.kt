@@ -49,6 +49,8 @@ import org.spotube.spotube.getPlatform
 import org.spotube.spotube.isDesktop
 import org.spotube.spotube.core.ui.component.ApplicationMainBar
 import org.spotube.spotube.core.ui.component.spotify.SpotifyChip
+import org.spotube.spotube.core.ui.component.spotify.SpotifyIconButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.theming.AppTheme
 import org.spotube.spotube.modules.downloads.DownloadsScreen
 import org.spotube.spotube.modules.library.album.LibraryAlbumsScreen
@@ -67,8 +69,6 @@ import org.koin.compose.koinInject
 import org.spotube.millennium.adaptive.WindowBreakpoints
 import org.spotube.millennium.composables.MillenniumButton
 import org.spotube.millennium.composables.MillenniumButtonStyle
-import org.spotube.millennium.composables.MillenniumIconButton
-import org.spotube.millennium.composables.MillenniumIconButtonStyle
 import org.spotube.millennium.composables.MillenniumTextField
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Grid
@@ -119,7 +119,7 @@ fun LibraryScreen(libraryState: LibraryState = koinInject()) {
         if (!expandedDesktop) {
             LibraryTabs(state, libraryState::onTabSelected)
         }
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+        Column(Modifier.weight(1f)) {
             when (state.currentTab) {
                 LibraryTab.Playlists -> MetadataPluginGuard(showTopBar = false, requireLogin = true) {
                     LibraryPlaylistsScreen(
@@ -157,6 +157,8 @@ private fun LibraryTabs(state: LibraryToolbarUiState, onTabSelected: (LibraryTab
     }
 }
 
+import androidx.compose.ui.graphics.Color
+
 @Composable
 internal fun LibraryToolbarTitle(
     state: LibraryToolbarUiState,
@@ -173,7 +175,7 @@ internal fun LibraryToolbarTitle(
     } else if (!expandedDesktop) {
         Text(
             text = stringResource(if (compactDesktop) Res.string.library_toolbar_compact_title else Res.string.library_screen_title),
-            style = AppTheme.typography.headlineSmall.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold),
+            style = AppTheme.typography.headlineSmall.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -192,14 +194,13 @@ internal fun RowScope.LibraryToolbarActions(
     viewMode: LibraryViewMode = state.viewModeOverride ?: defaultLibraryViewMode(!expandedDesktop),
     compactDesktop: Boolean = false
 ) {
-    val actionModifier = Modifier.size(if (compactDesktop) 32.dp else 40.dp)
     if (!expandedDesktop && state.searchMode) {
-        MillenniumIconButton(
+        SpotifyIconButton(
             icon = Iconsax.IconsaxCloseSquare,
             contentDescription = stringResource(Res.string.library_action_close_search),
             onClick = onCloseSearch,
-            modifier = actionModifier,
-            style = MillenniumIconButtonStyle.Quiet
+            modifier = Modifier.size(48.dp),
+            tint = SpotifyTokens.Muted
         )
     } else {
         if (state.canFilter) {
@@ -210,41 +211,40 @@ internal fun RowScope.LibraryToolbarActions(
                     Modifier.width(300.dp)
                 )
             } else {
-                MillenniumIconButton(
+                SpotifyIconButton(
                     icon = Iconsax.IconsaxSearchBroken,
                     contentDescription = stringResource(Res.string.library_action_search),
                     onClick = onOpenSearch,
-                    modifier = actionModifier,
-                    style = MillenniumIconButtonStyle.Quiet
+                    modifier = Modifier.size(48.dp),
+                    tint = SpotifyTokens.Muted
                 )
             }
         }
         if (state.canCreatePlaylist) {
-            MillenniumIconButton(
+            SpotifyIconButton(
                 icon = Iconsax.IconsaxAddSquare,
                 contentDescription = stringResource(Res.string.library_action_create_playlist),
                 onClick = onCreatePlaylist,
-                modifier = actionModifier,
-                style = MillenniumIconButtonStyle.Quiet
+                modifier = Modifier.size(48.dp),
+                tint = SpotifyTokens.Muted
             )
         }
         if (state.canRefresh) {
-            MillenniumIconButton(
+            SpotifyIconButton(
                 icon = Iconsax.IconsaxRefreshRight,
                 contentDescription = stringResource(Res.string.library_action_refresh_local_tracks),
                 onClick = onRefresh,
-                loading = state.isRefreshing,
-                modifier = actionModifier,
-                style = MillenniumIconButtonStyle.Quiet
+                modifier = Modifier.size(48.dp),
+                tint = SpotifyTokens.Muted
             )
         }
         if (state.canChangeView) {
-            MillenniumIconButton(
+            SpotifyIconButton(
                 icon = if (viewMode == LibraryViewMode.List) FeatherIcons.Grid else FeatherIcons.List,
                 contentDescription = stringResource(if (viewMode == LibraryViewMode.List) Res.string.library_action_grid_view else Res.string.library_action_list_view),
                 onClick = onToggleView,
-                modifier = actionModifier,
-                style = MillenniumIconButtonStyle.Quiet
+                modifier = Modifier.size(48.dp),
+                tint = SpotifyTokens.Muted
             )
         }
     }

@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import org.spotube.spotube.core.audioplayer.AudioPlayerQueue
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
@@ -77,11 +78,12 @@ import org.koin.core.parameter.parametersOf
 import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
 
 /**
- * Spotify mini player: 62dp height (matches bottom_sheet_now_playing_bar_height),
- * 16dp horizontal padding, 8dp vertical content padding.
- * No bottom bleed - the bar sits directly above bottom nav.
+ * Spotify 9.2 floating mini player.
+ * `floating_layout_bg`: 56dp tall pill, 8dp radius, gray_15 (#282828) fill,
+ * 8dp side/bottom margin, 8dp content padding, 40dp artwork, 2dp progress line
+ * pinned to the bottom edge (now_playing_bar.xml).
  */
-internal val FloatingPlayerContentHeight = 62.dp
+internal val FloatingPlayerContentHeight = 64.dp
 
 // The floating player on small screens that appears above the floating AppBottombar
 //
@@ -143,92 +145,105 @@ internal fun FloatingPlayerContent(
 ) {
     val coverModel = playerUiState.coverModel
 
-    // Spotify now playing bar: full width, 62dp tall, #242424, flat (no rounded corners),
-    // 16dp side padding, 40dp artwork and a 2dp progress line drawn on the bottom edge.
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(FloatingPlayerContentHeight)
-            .background(SpotifyTokens.Elevated)
+            .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(FloatingPlayerContentHeight - 12.dp)
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .then(albumArtModifier)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(SpotifyTokens.Highlight),
-                contentAlignment = Alignment.Center
-            ) {
-                if (coverModel != null) AsyncImage(
-                    model = coverModel,
-                    contentDescription = playerUiState.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                else MillenniumIcon(
-                    Iconsax.IconsaxMusic, contentDescription = null,
-                    tint = SpotifyTokens.Muted, modifier = Modifier.size(20.dp)
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp)
-            ) {
-                Text(
-                    text = if (playerUiState.queue.isEmpty()) stringResource(Res.string.player_nothing_playing) else playerUiState.title,
-                    style = AppTheme.typography.titleSmall.copy(color = Color.White),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (playerUiState.queue.isNotEmpty()) Text(
-                    text = playerUiState.artists,
-                    style = AppTheme.typography.labelSmall.copy(color = SpotifyTokens.Muted),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clickable(
-                        enabled = playerUiState.queue.isNotEmpty(),
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onPlayPause
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                MillenniumIcon(
-                    imageVector = if (playerUiState.isPlaying) Iconsax.IconsaxPause else Iconsax.IconsaxPlay,
-                    contentDescription = stringResource(if (playerUiState.isPlaying) Res.string.player_pause_content_description else Res.string.player_play_content_description),
-                    modifier = Modifier.size(24.dp),
-                    tint = Color.White
-                )
-            }
-        }
-
-        // 2dp progress line welded to the bottom edge of the bar.
         Box(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .height(2.dp)
-                .background(Color(0x33FFFFFF))
+                .fillMaxSize()
+                .clip(RoundedCornerShape(8.dp))
+                .background(SpotifyTokens.Bar)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(playerUiState.progress.coerceIn(0f, 1f))
-                    .height(2.dp)
-                    .background(Color.White)
-            )
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .then(albumArtModifier)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(SpotifyTokens.Highlight),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (coverModel != null) AsyncImage(
+                            model = coverModel,
+                            contentDescription = playerUiState.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        else MillenniumIcon(
+                            Iconsax.IconsaxMusic, contentDescription = null,
+                            tint = SpotifyTokens.Muted, modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp, end = 4.dp)
+                    ) {
+                        Text(
+                            text = if (playerUiState.queue.isEmpty()) stringResource(Res.string.player_nothing_playing) else playerUiState.title,
+                            style = AppTheme.typography.labelLarge.copy(
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (playerUiState.queue.isNotEmpty()) Text(
+                            text = playerUiState.artists,
+                            style = AppTheme.typography.labelSmall.copy(
+                                color = SpotifyTokens.Muted,
+                                fontSize = 11.sp
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable(
+                                enabled = playerUiState.queue.isNotEmpty(),
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onPlayPause
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        MillenniumIcon(
+                            imageVector = if (playerUiState.isPlaying) Iconsax.IconsaxPause else Iconsax.IconsaxPlay,
+                            contentDescription = stringResource(if (playerUiState.isPlaying) Res.string.player_pause_content_description else Res.string.player_play_content_description),
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                // 2dp progress line welded to the bottom edge of the pill.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(Color(0x33FFFFFF))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(playerUiState.progress.coerceIn(0f, 1f))
+                            .height(2.dp)
+                            .background(Color.White)
+                    )
+                }
+            }
         }
     }
 }

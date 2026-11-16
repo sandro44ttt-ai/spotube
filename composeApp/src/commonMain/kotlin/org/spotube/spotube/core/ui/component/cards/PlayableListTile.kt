@@ -15,16 +15,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.composeunstyled.LocalTextStyle
 import coil3.compose.AsyncImage
 import org.spotube.spotube.core.ui.component.LocalAnimatedVisibilityScope
 import org.spotube.spotube.core.ui.component.LocalSharedTransitionScope
 import org.spotube.spotube.core.ui.component.sharedElementOrNone
+import org.spotube.spotube.core.ui.component.spotify.SpotifyIconButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.misc.TextWithShimmer
 import org.spotube.spotube.core.ui.misc.shimmerApply
 import org.spotube.spotube.core.ui.theming.AppTheme
@@ -39,9 +45,6 @@ import org.spotube.millennium.composables.MillenniumIconButton
 import org.spotube.millennium.composables.MillenniumIconButtonStyle
 import org.spotube.millennium.composables.MillenniumListTile
 import org.spotube.millennium.theme.MillenniumTheme
-import org.spotube.millennium.theme.millenniumBevelBrush
-import org.spotube.millennium.theme.millenniumPanelBrush
-import org.spotube.millennium.theme.millenniumSurface
 import spotube.composeapp.generated.resources.*
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -59,40 +62,47 @@ fun PlayableListTile(
     playLoading: Boolean = false,
     addToQueueLoading: Boolean = false,
     imageModel: Any? = imageURL,
-    imageShape: Shape = RoundedCornerShape(6.dp),
+    imageShape: Shape = RoundedCornerShape(4.dp),
     placeholderIcon: ImageVector = Iconsax.IconsaxMusic,
     artwork: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     isBlacklisted: Boolean = false,
     compact: Boolean = false
 ) {
-    val colors = MillenniumTheme.colors
+    val titleColor = if (isPlaying) SpotifyTokens.Green else Color.White
+    val subtitleColor = if (isPlaying) SpotifyTokens.Green else SpotifyTokens.Muted
+
     MillenniumListTile(
-        modifier = modifier,
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Transparent),
         onClick = onClick ?: onPlay,
-        selected = isPlaying,
-        background = if (isPlaying) null else millenniumPanelBrush(colors),
-        shape = RoundedCornerShape(8.dp),
-        borderColor = if (isBlacklisted) colors.danger.copy(alpha = 0.5f) else if (isPlaying) null else colors.border,
-        titleForeground = if (isBlacklisted) colors.danger else null,
-        borderWidth = 1.dp,
-        contentPadding = PaddingValues(if (compact) 8.dp else 12.dp),
-        minimumHeight = if (compact) 52.dp else 76.dp,
+        selected = false,
+        background = Color.Transparent,
+        shape = RoundedCornerShape(0.dp),
+        borderWidth = 0.dp,
+        borderColor = Color.Transparent,
+        contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        minimumHeight = 64.dp,
         leading = {
             MediaArtwork(
                 imageModel, title,
-                Modifier.size(if (compact) 36.dp else 52.dp).sharedElementOrNone(
+                Modifier.size(48.dp).sharedElementOrNone(
                     sharedElementKey,
                     LocalSharedTransitionScope.current,
                     LocalAnimatedVisibilityScope.current
                 ),
-                imageShape, placeholderIcon, artwork
+                RoundedCornerShape(4.dp), placeholderIcon, artwork
             )
         },
         title = {
             TextWithShimmer(
                 title,
-                style = AppTheme.typography.titleSmall,
+                style = AppTheme.typography.titleMedium.copy(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = titleColor
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -101,8 +111,11 @@ fun PlayableListTile(
             {
                 TextWithShimmer(
                     text,
-                    style = AppTheme.typography.bodySmall,
-                    maxLines = 2,
+                    style = AppTheme.typography.bodyMedium.copy(
+                        fontSize = 13.sp,
+                        color = subtitleColor
+                    ),
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -115,31 +128,20 @@ fun PlayableListTile(
                 ) {
                     trailingContent?.invoke()
                     if (onAddToQueue != null && !isPlaying) {
-                        MillenniumIconButton(
+                        SpotifyIconButton(
+                            icon = Iconsax.IconsaxAddSquare,
+                            contentDescription = stringResource(Res.string.player_add_to_queue_content_description),
                             onClick = onAddToQueue,
-                            loading = addToQueueLoading,
-                            modifier = Modifier.size(if (compact) 32.dp else 40.dp),
-                            style = MillenniumIconButtonStyle.Secondary
-                        ) {
-                            MillenniumIcon(
-                                Iconsax.IconsaxAddSquare,
-                                stringResource(Res.string.player_add_to_queue_content_description)
-                            )
-                        }
+                            modifier = Modifier.size(48.dp),
+                            tint = SpotifyTokens.Muted
+                        )
                     }
                     if (onPlay != null) {
-                        MillenniumIconButton(
+                        SpotifyPlayButton(
+                            isPlaying = isPlaying,
                             onClick = onPlay,
-                            loading = playLoading,
-                            modifier = Modifier.size(if (compact) 32.dp else 40.dp),
-                            style = MillenniumIconButtonStyle.Primary
-                        ) {
-                            MillenniumIcon(
-                                if (isPlaying) Iconsax.IconsaxPause else Iconsax.IconsaxPlay,
-                                stringResource(if (isPlaying) Res.string.player_pause_content_description else Res.string.player_play_content_description),
-                                tint = LocalTextStyle.current.color
-                            )
-                        }
+                            modifier = Modifier.size(48.dp)
+                        )
                     }
                 }
             }
@@ -152,17 +154,15 @@ internal fun MediaArtwork(
     model: Any?,
     title: String,
     modifier: Modifier,
-    shape: Shape = RoundedCornerShape(6.dp),
+    shape: Shape = RoundedCornerShape(4.dp),
     placeholderIcon: ImageVector = Iconsax.IconsaxMusic,
     artwork: (@Composable () -> Unit)? = null
 ) {
     Box(
-        modifier.millenniumSurface(
-            background = millenniumBevelBrush(MillenniumTheme.colors),
-            shape = shape,
-            borderColor = MillenniumTheme.colors.border,
-            borderWidth = 1.dp
-        ).clip(shape).shimmerApply(),
+        modifier
+            .clip(shape)
+            .background(SpotifyTokens.Surface)
+            .shimmerApply(),
         contentAlignment = Alignment.Center
     ) {
         if (artwork != null) artwork()
@@ -176,7 +176,7 @@ internal fun MediaArtwork(
             placeholderIcon,
             null,
             modifier = Modifier.size(24.dp),
-            tint = AppTheme.colors.onSurfaceVariant
+            tint = SpotifyTokens.Muted
         )
     }
 }

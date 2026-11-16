@@ -41,9 +41,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.spotube.spotube.core.audioplayer.AudioPlayerQueue
 import org.spotube.spotube.core.audioplayer.QueueCollectionEntry
@@ -64,6 +67,8 @@ import spotube.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import org.spotube.spotube.core.ui.component.cards.PlayableListTile
 import org.spotube.spotube.core.ui.component.cards.MediaCardSurface
+import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.input.InputMode
@@ -135,7 +140,7 @@ fun LikedTracksCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(4.dp))
                         .sharedElementOrNone(
                             key = "saved_tracks_art",
                             sharedTransitionScope = sharedTransitionScope,
@@ -149,56 +154,34 @@ fun LikedTracksCard(
                     contentAlignment = Alignment.BottomEnd
                 ) {
                     if (isHovered || touchInput || isPlaying || playLoading || addToQueueLoading) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(4.dp)
-                        ) {
-                            MillenniumIconButton(
-                                onClick = onAddToQueue,
-                                loading = addToQueueLoading,
-                                modifier = Modifier.size(30.dp),
-                                style = MillenniumIconButtonStyle.Secondary
-                            ) {
-                                MillenniumIcon(
-                                    imageVector = Iconsax.IconsaxAddSquare,
-                                    contentDescription = stringResource(Res.string.player_add_to_queue_content_description),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            MillenniumIconButton(
-                                onClick = onPlay,
-                                loading = playLoading,
-                                modifier = Modifier.size(30.dp),
-                                style = MillenniumIconButtonStyle.Primary
-                            ) {
-                                MillenniumIcon(
-                                    imageVector = if (isPlaying) {
-                                        Iconsax.IconsaxPauseCircle
-                                    } else Iconsax.Play,
-                                    contentDescription = stringResource(Res.string.player_play_content_description),
-                                    modifier = Modifier.size(16.dp),
-                                    tint = LocalTextStyle.current.color
-                                )
-                            }
-                        }
+                        SpotifyPlayButton(
+                            isPlaying = isPlaying,
+                            onClick = onPlay,
+                            modifier = Modifier.size(48.dp)
+                        )
                     }
                 }
             }
             Column(
-                modifier = Modifier.fillMaxWidth().padding(12.dp)
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             ) {
                 Text(
                     text = title,
-                    style = AppTheme.typography.titleSmall,
+                    style = AppTheme.typography.titleMedium.copy(
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    style = AppTheme.typography.bodySmall,
-                    color = AppTheme.colors.onSurfaceVariant,
+                    style = AppTheme.typography.bodyMedium.copy(
+                        fontSize = 13.sp,
+                        color = SpotifyTokens.Muted
+                    ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

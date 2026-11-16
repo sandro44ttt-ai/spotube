@@ -42,7 +42,9 @@ internal fun <T> LibraryMediaCollection(
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
     val reportViewport by rememberUpdatedState(onViewportChanged)
-    val padding = PaddingValues(top = 16.dp, bottom = LocalAppShellBottomInset.current + 16.dp)
+    val bottomInset = LocalAppShellBottomInset.current
+    val listPadding = PaddingValues(top = 8.dp, bottom = bottomInset + 8.dp, start = 16.dp, end = 16.dp)
+    val gridPadding = PaddingValues(top = 8.dp, bottom = bottomInset + 8.dp, start = 16.dp, end = 16.dp)
     LaunchedEffect(viewMode, gridState, listState) {
         val positions = if (viewMode == LibraryViewMode.List) snapshotFlow {
             listState.layoutInfo.let { it.visibleItemsInfo.lastOrNull()?.index to it.totalItemsCount }
@@ -53,8 +55,8 @@ internal fun <T> LibraryMediaCollection(
     }
     if (viewMode == LibraryViewMode.List) {
         LazyColumn(
-            modifier.fillMaxSize(), state = listState, contentPadding = padding,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier.fillMaxSize(), state = listState, contentPadding = listPadding,
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             if (loading) items(8) { SkeletonTree(true) { skeleton(true) } }
             else {
@@ -66,7 +68,7 @@ internal fun <T> LibraryMediaCollection(
     } else {
         LazyVerticalGrid(
             GridCells.Adaptive(160.dp), modifier.fillMaxSize(), state = gridState,
-            contentPadding = padding, horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = gridPadding, horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (loading) items(8) { SkeletonTree(true) { skeleton(false) } }
