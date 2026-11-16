@@ -57,10 +57,8 @@ internal fun MediaCardSurface(
         modifier.graphicsLayer { scaleX = scale; scaleY = scale }
             .background(
                 Brush.verticalGradient(
-                    listOf(
-                        SpotifyTokens.Surface.copy(alpha = highlight),
-                        SpotifyTokens.Surface.copy(alpha = highlight)
-                    )
+                    0f to SpotifyTokens.Surface.copy(alpha = highlight),
+                    1f to SpotifyTokens.Surface.copy(alpha = highlight)
                 )
             )
             .clip(shape)

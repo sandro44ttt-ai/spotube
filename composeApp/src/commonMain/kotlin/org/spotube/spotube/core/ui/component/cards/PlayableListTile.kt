@@ -78,7 +78,7 @@ fun PlayableListTile(
         modifier = modifier,
         onClick = onClick ?: onPlay,
         selected = false,
-        background = Brush.solid(Color.Transparent),
+        background = Brush.solidColor(Color.Transparent),
         shape = RoundedCornerShape(0.dp),
         borderWidth = 0.dp,
         borderColor = Color.Transparent,
