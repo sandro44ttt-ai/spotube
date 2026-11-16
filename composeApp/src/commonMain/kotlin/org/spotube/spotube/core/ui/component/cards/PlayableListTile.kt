@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -78,7 +79,7 @@ fun PlayableListTile(
         modifier = modifier,
         onClick = onClick ?: onPlay,
         selected = false,
-        background = Brush.solidColor(Color.Transparent),
+        background = SolidColor(Color.Transparent),
         shape = RoundedCornerShape(0.dp),
         borderWidth = 0.dp,
         borderColor = Color.Transparent,
