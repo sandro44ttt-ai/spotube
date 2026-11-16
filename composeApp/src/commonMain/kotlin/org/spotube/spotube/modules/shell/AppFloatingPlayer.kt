@@ -34,10 +34,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Color
-
-import org.spotube.spotube.core.ui.theming.AppTheme
-import com.composeunstyled.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,10 +42,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.composeunstyled.Text
+import org.spotube.millennium.composables.MillenniumIcon
 import org.spotube.spotube.core.audioplayer.AudioPlayerQueue
 import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
@@ -67,7 +66,7 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
-import androidx.compose.ui.text.font.FontWeight
+import org.spotube.spotube.core.ui.theming.AppTheme
 
 /**
  * Spotify 9.2 floating mini player.
