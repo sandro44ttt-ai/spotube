@@ -38,12 +38,6 @@ object Iconsax {
     val SpotifySort: androidx.compose.ui.graphics.vector.ImageVector
         get() = IconsaxSort
 
-    val SpotifyListView: androidx.compose.ui.graphics.vector.ImageVector
-        get() = IconsaxListView
-
-    val SpotifyGridView: androidx.compose.ui.graphics.vector.ImageVector
-        get() = IconsaxMusicPlaylist // closest match for grid
-
     val SpotifyVolume: androidx.compose.ui.graphics.vector.ImageVector
         get() = IconsaxVolumeHigh
 
@@ -55,9 +49,6 @@ object Iconsax {
 
     val SpotifyQueue: androidx.compose.ui.graphics.vector.ImageVector
         get() = IconsaxMusicPlaylist // queue uses playlist icon
-
-    val SpotifyDevices: androidx.compose.ui.graphics.vector.ImageVector
-        get() = IconsaxDevices
 
     val SpotifyShare: androidx.compose.ui.graphics.vector.ImageVector
         get() = IconsaxShare
