@@ -75,6 +75,7 @@ fun AlbumCard(
         modifier = if (listMode) modifier else modifier.width(160.dp),
         sharedElementKey = "album_art_${album.id}",
         listMode = listMode,
+        showActions = !listMode,
         playLoading = CollectionPlaybackKey(RemoteCollectionType.Album, album.id, PlaybackDestinationAction.Play) in busyCollections,
         addToQueueLoading = CollectionPlaybackKey(RemoteCollectionType.Album, album.id, PlaybackDestinationAction.AddToQueue) in busyCollections
     )

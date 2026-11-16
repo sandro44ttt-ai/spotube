@@ -1,70 +1,106 @@
 package org.spotube.spotube.resources.iconsax
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.unit.dp
+
 object Iconsax {
     // Spotify 9.2.0.2053 icons mapped to existing Iconsax icons
-    val SpotifyPlay: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyPlay: ImageVector
         get() = IconsaxPlay
 
-    val SpotifyPause: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyPause: ImageVector
         get() = IconsaxPause
 
-    val SpotifySkipNext: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifySkipNext: ImageVector
         get() = IconsaxNext
 
-    val SpotifySkipBack: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifySkipBack: ImageVector
         get() = IconsaxPrevious
 
-    val SpotifyRepeat: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyRepeat: ImageVector
         get() = IconsaxRepeatMusic
 
-    val SpotifyRepeatOnce: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyRepeatOnce: ImageVector
         get() = IconsaxRepeateOne
 
-    val SpotifyShuffle: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyShuffle: ImageVector
         get() = IconsaxShuffle
 
-    val SpotifyHeart: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyHeart: ImageVector
         get() = IconsaxHeart
 
-    val SpotifyPlus: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyPlus: ImageVector
         get() = IconsaxAdd
 
-    val SpotifyAddSquare: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyAddSquare: ImageVector
         get() = IconsaxAddSquare
 
-    val SpotifySearch: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifySearch: ImageVector
         get() = IconsaxSearch
 
-    val SpotifySort: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifySort: ImageVector
         get() = IconsaxSort
 
-    val SpotifyVolume: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyVolume: ImageVector
         get() = IconsaxVolumeHigh
 
-    val SpotifyVolumeLow: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyVolumeLow: ImageVector
         get() = IconsaxVolumeLow
 
-    val SpotifyVolumeCross: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyVolumeCross: ImageVector
         get() = IconsaxVolumeCross
 
-    val SpotifyQueue: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyQueue: ImageVector
         get() = IconsaxMusicPlaylist // queue uses playlist icon
 
-    val SpotifyShare: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyShare: ImageVector
         get() = IconsaxShare
 
-    val SpotifyMore: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyMore: ImageVector
         get() = Iconsax3DotsMore
 
-    val SpotifyClose: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyClose: ImageVector
         get() = IconsaxCloseSquare
 
-    val SpotifyRefresh: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyRefresh: ImageVector
         get() = IconsaxRefreshRight
 
-    val SpotifyHome: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifyHome: ImageVector
         get() = IconsaxHome
 
-    val SpotifySettings: androidx.compose.ui.graphics.vector.ImageVector
+    val SpotifySettings: ImageVector
         get() = IconsaxSetting
+
+    /**
+     * Exact "Your Library" glyph from Spotify 9.2 (`encore_icon_collection_active_24`):
+     * a bookshelf/stack of three items.
+     */
+    val SpotifyLibrary: ImageVector
+        get() {
+            if (_SpotifyLibrary != null) return _SpotifyLibrary!!
+            _SpotifyLibrary = ImageVector.Builder(
+                name = "SpotifyLibrary",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M3,22a1,1 0,0 1,-1 -1V3a1,1 0,0 1,2 0v18a1,1 0,0 1,-1 1" +
+                            "M15.5,2.134A1,1 0,0 0,14 3v18a1,1 0,0 0,1 1h6a1,1 0,0 0,1 -1V6.464a1,1 0,0 0,-0.5 -0.866z" +
+                            "M9,2a1,1 0,0 0,-1 1v18a1,1 0,1 0,2 0V3a1,1 0,0 0,-1 -1"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyLibrary!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyLibrary: ImageVector? = null
 }

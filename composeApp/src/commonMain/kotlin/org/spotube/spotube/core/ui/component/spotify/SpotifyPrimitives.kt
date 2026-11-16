@@ -129,9 +129,9 @@ fun SpotifyChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val borderWidth = if (selected) 1.5.dp else 1.dp
-    val borderColor = if (selected) SpotifyTokens.Green else SpotifyTokens.Outline
-    val background = if (selected) SpotifyTokens.GreenDark else Color.Transparent
+    val borderWidth = 1.dp
+    val borderColor = if (selected) Color.Transparent else SpotifyTokens.Outline
+    val background = if (selected) SpotifyTokens.Green else Color.Transparent
     Box(
         modifier = modifier
             .height(32.dp)
@@ -145,7 +145,7 @@ fun SpotifyChip(
         Text(
             text = text,
             style = AppTheme.typography.labelMedium.copy(
-                color = Color.White,
+                color = if (selected) Color.Black else Color.White,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
             ),
             maxLines = 1,
@@ -289,6 +289,105 @@ fun SpotifyPlayButtonList(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) = SpotifyPlayButton(isPlaying, onClick, modifier.size(48.dp).clip(CircleShape).background(Color.Transparent), 23.dp)
+
+/** Spotify action pill with a leading glyph: 48dp tall, green fill, black label. */
+@Composable
+fun SpotifyPlayPillButton(
+    text: String,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(SpotifyTokens.Green)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        MillenniumIcon(
+            imageVector = if (isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = Color.Black
+        )
+        Text(
+            text = text,
+            style = AppTheme.typography.labelLarge.copy(
+                color = Color.Black,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** Spotify outline pill with a leading glyph: 48dp tall, 1dp #7F7F7F outline, white label. */
+@Composable
+fun SpotifyOutlinePillButton(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .border(1.dp, SpotifyTokens.Outline, RoundedCornerShape(24.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        MillenniumIcon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = Color.White
+        )
+        Text(
+            text = text,
+            style = AppTheme.typography.labelLarge.copy(
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** Spotify outline circular icon button (shuffle / download actions in collection headers). */
+@Composable
+fun SpotifyOutlineCircleIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .border(1.dp, SpotifyTokens.Outline, CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        MillenniumIcon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(24.dp),
+            tint = Color.White
+        )
+    }
+}
 
 /** Spotify shelf title: 24sp bold, 16dp leading padding. */
 @Composable

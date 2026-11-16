@@ -87,7 +87,7 @@ fun AppBottombar(
         listOf(
             SpotifyTab(Res.string.nav_home, Iconsax.IconsaxHome, Routes.Home),
             SpotifyTab(Res.string.nav_search, Iconsax.IconsaxSearch, Routes.Search),
-            SpotifyTab(Res.string.library_toolbar_compact_title, Iconsax.IconsaxMusicLibrary, Routes.Library)
+            SpotifyTab(Res.string.library_toolbar_compact_title, Iconsax.SpotifyLibrary, Routes.Library)
         )
     }
 

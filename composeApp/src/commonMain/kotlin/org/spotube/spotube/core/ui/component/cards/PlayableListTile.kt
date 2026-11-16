@@ -71,7 +71,8 @@ fun PlayableListTile(
     artwork: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     isBlacklisted: Boolean = false,
-    compact: Boolean = false
+    compact: Boolean = false,
+    showActions: Boolean = true
 ) {
     val titleColor = if (isPlaying) SpotifyTokens.Green else Color.White
     val subtitleColor = if (isPlaying) SpotifyTokens.Green else SpotifyTokens.Muted
@@ -122,7 +123,7 @@ fun PlayableListTile(
                 )
             }
         },
-        trailing = if (onPlay != null || onAddToQueue != null || trailingContent != null) {
+        trailing = if (showActions && (onPlay != null || onAddToQueue != null || trailingContent != null)) {
             {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),

@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.spotube.spotube.core.ui.misc.TextWithShimmer
 import org.spotube.spotube.core.ui.misc.shimmerApply
+import org.spotube.spotube.core.ui.component.spotify.SpotifyOutlineCircleIconButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayPillButton
 import org.spotube.spotube.resources.iconsax.Iconsax
 import org.spotube.spotube.resources.iconsax.IconsaxAddSquare
 import org.spotube.spotube.resources.iconsax.IconsaxEdit
@@ -121,31 +123,24 @@ fun CollectionDetails(
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val modifier = if (isCompact) {
                         Modifier.weight(1f)
                     } else {
                         Modifier
                     }
 
-                    MillenniumButton(
-                        modifier = modifier,
+                    SpotifyPlayPillButton(
+                        text = if (isPlaying) stringResource(Res.string.player_pause_content_description) else stringResource(Res.string.player_play_content_description),
+                        isPlaying = isPlaying,
                         onClick = onPlay,
-                        loading = isPlayLoading) {
-                        MillenniumIcon(
-                            imageVector = if (isPlaying) Iconsax.IconsaxPauseCircle else Iconsax.IconsaxPlayCircle2,
-                            contentDescription = if (isPlaying) stringResource(Res.string.player_pause_content_description) else stringResource(Res.string.player_play_content_description))
-                        TextWithShimmer(text = if (isPlaying) stringResource(Res.string.player_pause_content_description) else stringResource(Res.string.player_play_content_description))
-                    }
-                    MillenniumButton(
-                        modifier = modifier,
-                        onClick = onShufflePlay,
-                        loading = isShuffleLoading,
-                        style = MillenniumButtonStyle.Secondary
-                    ) {
-                        MillenniumIcon(imageVector = Iconsax.IconsaxShuffle, contentDescription = stringResource(Res.string.collection_details_shuffle_play))
-                        TextWithShimmer(text = stringResource(Res.string.collection_details_shuffle))
-                    }
+                        modifier = modifier
+                    )
+                    SpotifyOutlineCircleIconButton(
+                        icon = Iconsax.SpotifyShuffle,
+                        contentDescription = stringResource(Res.string.collection_details_shuffle_play),
+                        onClick = onShufflePlay
+                    )
                 }
             }
         }
@@ -234,7 +229,7 @@ fun CollectionDetails(
             Box(
                 modifier = Modifier
                     .size(if (isCompact) 100.dp else 200.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(4.dp))
                     .sharedElementOrNone(
                         key = sharedElementKey,
                         sharedTransitionScope = sharedTransitionScope,
@@ -281,16 +276,15 @@ fun CollectionDetails(
             }
         }
 
-        MillenniumCard(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            contentPadding = PaddingValues(0.dp)) {
+                .padding(vertical = 8.dp)) {
             if (isCompact) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),

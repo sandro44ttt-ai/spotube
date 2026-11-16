@@ -79,7 +79,8 @@ fun PlayableCard(
     sharedElementKey: String? = null,
     listMode: Boolean = false,
     playLoading: Boolean = false,
-    addToQueueLoading: Boolean = false
+    addToQueueLoading: Boolean = false,
+    showActions: Boolean = true
 ) {
     if (listMode) {
         PlayableListTile(
@@ -93,7 +94,8 @@ fun PlayableCard(
             modifier,
             sharedElementKey,
             playLoading = playLoading,
-            addToQueueLoading = addToQueueLoading
+            addToQueueLoading = addToQueueLoading,
+            showActions = showActions
         )
         return
     }

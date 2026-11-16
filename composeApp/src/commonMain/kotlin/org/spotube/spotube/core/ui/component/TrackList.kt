@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.ui.state.ToggleableState
 import org.spotube.millennium.composables.MillenniumCard
@@ -79,15 +80,19 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
@@ -359,24 +364,15 @@ fun TrackList(
     }
 
     val trackCardContent: @Composable () -> Unit = {
-        MillenniumCard(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = TrackCardOuterPadding),
-            contentPadding = PaddingValues(0.dp)) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = TrackCardInnerPadding, bottom = TrackCardInnerPadding)
-            ) {
-                visibleTracks.forEachIndexed { displayedIndex, track ->
-                    if (displayedIndex > 0) {
-                        MillenniumSeparator()
-                    }
-                    trackRow(displayedIndex, track)
-                }
-                trackCardFooter()
+                .padding(vertical = TrackCardOuterPadding)
+        ) {
+            visibleTracks.forEachIndexed { displayedIndex, track ->
+                trackRow(displayedIndex, track)
             }
+            trackCardFooter()
         }
     }
 
@@ -645,10 +641,19 @@ private fun TrackListRow(
         modifier = modifier,
         selected = isSelected || isCurrentTrack,
         onClick = onTrackClick,
+        background = SolidColor(Color.Transparent),
+        shape = RoundedCornerShape(0.dp),
+        borderWidth = 0.dp,
+        borderColor = Color.Transparent,
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+        minimumHeight = 64.dp,
         title = {
             TextWithShimmer(
                 text = track.title,
-                style = AppTheme.typography.bodyLarge,
+                style = AppTheme.typography.titleMedium.copy(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         },
@@ -695,8 +700,8 @@ private fun TrackListRow(
 
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(AppTheme.shapes.small)
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(4.dp))
                         .hoverable(interactionSource = artworkInteractionSource),
                     contentAlignment = Alignment.Center) {
                     val imageUrl = (track.album?.thumbnails ?: track.thumbnails)?.firstOrNull()?.url
@@ -743,8 +748,8 @@ private fun TrackListRow(
 
                     TextWithShimmer(
                         text = track.album!!.title,
-                        style = AppTheme.typography.bodyMedium,
-                        color = AppTheme.colors.primary,
+                        style = AppTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                        color = SpotifyTokens.Muted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
@@ -773,9 +778,9 @@ private fun TrackListRow(
 
                 TextWithShimmer(
                     text = track.durationMs.toDurationString(),
-                    style = AppTheme.typography.bodySmall,
+                    style = AppTheme.typography.bodySmall.copy(fontSize = 13.sp),
                     textAlign = TextAlign.End,
-                    color = AppTheme.colors.onSurfaceVariant,
+                    color = SpotifyTokens.Muted,
                     modifier = Modifier.width(56.dp))
 
                 if (useDropdownForOptions) {
@@ -818,8 +823,8 @@ private fun ArtistChips(
 
                 TextWithShimmer(
                     text = artist.name,
-                    style = AppTheme.typography.bodySmall,
-                    color = AppTheme.colors.primary,
+                    style = AppTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                    color = SpotifyTokens.Muted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textDecoration = if (isHovered || isPressed) TextDecoration.Underline else null,
@@ -842,8 +847,8 @@ private fun ArtistChips(
         if (remaining > 0) {
             TextWithShimmer(
                 text = stringResource(Res.string.track_list_more_artists, remaining),
-                style = AppTheme.typography.bodySmall,
-                color = AppTheme.colors.primary,
+                style = AppTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                color = SpotifyTokens.Muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.clickable(onClick = onArtistsOverflowClick))

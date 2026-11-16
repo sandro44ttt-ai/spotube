@@ -50,7 +50,6 @@ import coil3.compose.AsyncImage
 import com.composeunstyled.Text
 import org.spotube.millennium.composables.MillenniumIcon
 import org.spotube.spotube.core.audioplayer.AudioPlayerQueue
-import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.modules.saved_tracks.SavedTracksViewModel
 import org.spotube.spotube.modules.saved_tracks.SAVED_TRACKS_COLLECTION_ID
@@ -136,6 +135,9 @@ internal fun FloatingPlayerContent(
 ) {
     val coverModel = playerUiState.coverModel
 
+    // Spotify only shows the now-playing bar while something is queued.
+    if (playerUiState.queue.isEmpty()) return
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -200,12 +202,20 @@ internal fun FloatingPlayerContent(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    // 40dp play button (now_playing_bar_actions_button_size)
-                    SpotifyPlayButton(
-                        isPlaying = playerUiState.isPlaying,
-                        onClick = onPlayPause,
-                        size = 40.dp
-                    )
+                    // Spotify mini player uses a plain white play/pause glyph (no green circle).
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable(onClick = onPlayPause),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        MillenniumIcon(
+                            imageVector = if (playerUiState.isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.White
+                        )
+                    }
                 }
 
                 // 2dp progress line welded to the bottom edge of the pill.

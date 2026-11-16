@@ -75,6 +75,7 @@ fun PlaylistCard(
         modifier = modifier,
         sharedElementKey = "playlist_art_${playlist.id}",
         listMode = listMode,
+        showActions = !listMode,
         playLoading = CollectionPlaybackKey(RemoteCollectionType.Playlist, playlist.id, PlaybackDestinationAction.Play) in busyCollections,
         addToQueueLoading = CollectionPlaybackKey(RemoteCollectionType.Playlist, playlist.id, PlaybackDestinationAction.AddToQueue) in busyCollections
     )
