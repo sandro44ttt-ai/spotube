@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -646,9 +647,13 @@ private fun hslColor(hue: Float, saturation: Float, lightness: Float): Color {
  * with the song exactly like the real player.
  */
 @Composable
-fun spotifyPlayerTintBrush(seed: String?): Brush {
-    val top = remember(seed) { playerTint(seed, 0.23f) }
-    val bottomTint = remember(seed) { playerTint(seed, 0.12f) }
+fun spotifyPlayerTintBrush(seed: String?, tint: Color? = null): Brush {
+    val top = remember(seed, tint) {
+        tint?.let { lerp(SpotifyTokens.Base, it, 0.45f) } ?: playerTint(seed, 0.23f)
+    }
+    val bottomTint = remember(seed, tint) {
+        tint?.let { lerp(SpotifyTokens.Base, it, 0.22f) } ?: playerTint(seed, 0.12f)
+    }
     return Brush.verticalGradient(
         0f to top,
         0.42f to bottomTint,
@@ -657,18 +662,70 @@ fun spotifyPlayerTintBrush(seed: String?): Brush {
     )
 }
 
-/** Exact Spotify explicit badge (`ic_explicit`): rounded gray square with a cut-out E. */
+@Composable
+fun spotifyCollectionHeaderBrush(tint: Color?): Brush {
+    val top = remember(tint) {
+        tint?.let { lerp(SpotifyTokens.Base, it, 0.55f) } ?: SpotifyTokens.Highlight
+    }
+    val middle = remember(tint) {
+        tint?.let { lerp(SpotifyTokens.Base, it, 0.22f) } ?: SpotifyTokens.Base
+    }
+    return Brush.verticalGradient(
+        0f to top,
+        0.55f to middle,
+        1f to SpotifyTokens.Base
+    )
+}
+
+/** Exact Spotify explicit pill: light gray fill, dark 9sp bold label. */
 @Composable
 fun SpotifyExplicitBadge(
-    modifier: Modifier = Modifier,
-    size: Dp = 16.dp
+    label: String,
+    modifier: Modifier = Modifier
 ) {
-    MillenniumIcon(
-        imageVector = Iconsax.SpotifyExplicit,
-        contentDescription = null,
-        modifier = modifier.size(size),
-        tint = SpotifyTokens.Muted
-    )
+    Box(
+        modifier = modifier
+            .height(16.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(SpotifyTokens.Muted)
+            .padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = AppTheme.typography.labelSmall.copy(
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = SpotifyTokens.Base
+            ),
+            maxLines = 1
+        )
+    }
+}
+
+/** Spotify circular top bar button (back / overflow) over full-bleed artwork. */
+@Composable
+fun SpotifyCircleTopBarButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.35f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        MillenniumIcon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(24.dp),
+            tint = Color.White
+        )
+    }
 }
 
 /** Spotify 2026 seek bar: 4dp white track, white thumb, 12sp timestamps. */

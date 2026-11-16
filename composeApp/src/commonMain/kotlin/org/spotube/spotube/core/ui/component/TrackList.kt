@@ -203,6 +203,7 @@ fun TrackList(
     contentPadding: PaddingValues = PaddingValues(bottom = LocalAppShellBottomInset.current),
     simplified: Boolean = false,
     scrollable: Boolean = true,
+    flat: Boolean = false,
     state: LazyListState? = null) {
     val filterState = rememberTextFieldState()
     val filterQuery = filterState.text.toString()
@@ -491,7 +492,7 @@ fun TrackList(
                                 onClick = onClick,
                                 style = MillenniumIconButtonStyle.Quiet) {
                                 MillenniumIcon(
-                                    imageVector = Iconsax.Iconsax3DotsMore,
+                                    imageVector = Iconsax.SpotifyMoreVertical,
                                     contentDescription = stringResource(Res.string.track_list_bulk_actions))
                             }
                         })
@@ -506,14 +507,18 @@ fun TrackList(
               modifier = Modifier
                   .widthIn(max = 1280.dp)
                   .align(Alignment.TopCenter)
-                  .padding(horizontal = if (isCompact) 6.dp else 16.dp, vertical = 8.dp)) {
+                  .padding(
+                      horizontal = if (flat) 0.dp else if (isCompact) 6.dp else 16.dp,
+                      vertical = if (flat) 0.dp else 8.dp)) {
             // Rows are separate lazy items (only on-screen ones are composed, #3200), so the card
             // they sit on is drawn once behind the list, spanning the card's laid-out items.
-            MillenniumCard(
-                modifier = Modifier
-                    .matchParentSize()
-                    .trackCardBounds(listState, with(density) { TrackCardOuterPadding.roundToPx() }),
-                contentPadding = PaddingValues(0.dp)) {}
+            if (!flat) {
+                MillenniumCard(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .trackCardBounds(listState, with(density) { TrackCardOuterPadding.roundToPx() }),
+                    contentPadding = PaddingValues(0.dp)) {}
+            }
             // No arrangement spacing: it would also open gaps between the card's rows. The 2.dp
             // gaps around the card are applied to the items before and after it instead.
             LazyColumn(
@@ -521,20 +526,22 @@ fun TrackList(
                 contentPadding = contentPadding) {
                 if (headerContent != null) {
                     item {
-                        Box(Modifier.padding(bottom = 2.dp)) { headerContent() }
+                        Box(Modifier.padding(bottom = if (flat) 0.dp else 2.dp)) { headerContent() }
                     }
                 }
                 if (!simplified) {
                     item { Box(Modifier.padding(bottom = 2.dp)) { filterSortRow() } }
                 }
-                item(key = TrackCardTopKey) {
-                    Spacer(Modifier.fillMaxWidth().height(TrackCardOuterPadding + TrackCardInnerPadding))
+                if (!flat) {
+                    item(key = TrackCardTopKey) {
+                        Spacer(Modifier.fillMaxWidth().height(TrackCardOuterPadding + TrackCardInnerPadding))
+                    }
                 }
                 // Plugin ids can repeat (the same track twice in a playlist).
                 val rowKeys = uniqueLazyKeys(visibleTracks) { it.id }
                 items(visibleTracks.size, key = { TrackCardRowKeyPrefix + rowKeys[it] }) { displayedIndex ->
                     Column(Modifier.fillMaxWidth()) {
-                        if (displayedIndex > 0) {
+                        if (!flat && displayedIndex > 0) {
                             MillenniumSeparator()
                         }
                         trackRow(displayedIndex, visibleTracks[displayedIndex])
@@ -543,8 +550,10 @@ fun TrackList(
                 item(key = TrackCardFooterKey) {
                     Column(Modifier.fillMaxWidth()) { trackCardFooter() }
                 }
-                item(key = TrackCardBottomKey) {
-                    Spacer(Modifier.fillMaxWidth().height(TrackCardInnerPadding + TrackCardOuterPadding))
+                if (!flat) {
+                    item(key = TrackCardBottomKey) {
+                        Spacer(Modifier.fillMaxWidth().height(TrackCardInnerPadding + TrackCardOuterPadding))
+                    }
                 }
                 if (footerContent != null) {
                     item {
@@ -569,7 +578,9 @@ fun TrackList(
                         isJamGuest = isJamGuest)
                 }
             }
-            VerticalScrollbar(listState, modifier = Modifier.align(Alignment.CenterEnd))
+            if (!flat) {
+                VerticalScrollbar(listState, modifier = Modifier.align(Alignment.CenterEnd))
+            }
         }
     } else {
         Column(
@@ -667,7 +678,7 @@ private fun TrackListRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (track.explicit == true) {
-                    SpotifyExplicitBadge(size = 14.dp)
+                    SpotifyExplicitBadge(label = stringResource(Res.string.explicit_label))
                 }
                 ArtistChips(
                     artists = track.artists,
@@ -811,7 +822,7 @@ private fun TrackListRow(
                         onClick = onShowOptionsClick,
                         style = MillenniumIconButtonStyle.Quiet) {
                         MillenniumIcon(
-                            imageVector = Iconsax.Iconsax3DotsMore,
+                            imageVector = Iconsax.SpotifyMoreVertical,
                             contentDescription = stringResource(Res.string.track_options_title))
                     }
                 }

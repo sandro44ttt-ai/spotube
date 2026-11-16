@@ -47,6 +47,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
+import coil3.compose.rememberAsyncImagePainter
+import androidx.compose.ui.graphics.lerp
+import org.spotube.spotube.core.ui.media.rememberDominantColor
 import com.composeunstyled.Text
 import org.spotube.millennium.composables.MillenniumIcon
 import org.spotube.spotube.core.audioplayer.AudioPlayerQueue
@@ -60,6 +64,7 @@ import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.player_play_content_description
 import spotube.composeapp.generated.resources.player_pause_content_description
 import spotube.composeapp.generated.resources.player_nothing_playing
+import spotube.composeapp.generated.resources.player_lyrics
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -89,6 +94,7 @@ fun AppFloatingPlayer(
     modifier: Modifier = Modifier,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    onExpandLyrics: () -> Unit = {},
     audioPlayer: AudioPlayerInterface = koinInject(),
     audioPlayerQueue: AudioPlayerQueue = koinInject(),
     savedTracksViewModel: SavedTracksViewModel = koinViewModel<SavedTracksViewModel>(
@@ -116,10 +122,12 @@ fun AppFloatingPlayer(
         modifier = modifier,
         albumArtModifier = albumArtModifier,
         onPlayPause = ::onPlayPause,
+        onExpandLyrics = onExpandLyrics,
         heartButton = {
             PlayerHeartButton(
                 audioPlayerQueue = audioPlayerQueue,
-                savedTracksViewModel = savedTracksViewModel
+                savedTracksViewModel = savedTracksViewModel,
+                style = PlayerSaveButtonStyle.MiniPlus
             )
         }
     )
@@ -131,9 +139,15 @@ internal fun FloatingPlayerContent(
     modifier: Modifier = Modifier,
     albumArtModifier: Modifier = Modifier,
     onPlayPause: () -> Unit,
+    onExpandLyrics: () -> Unit = {},
     heartButton: @Composable () -> Unit
 ) {
     val coverModel = playerUiState.coverModel
+    val coverPainter = rememberAsyncImagePainter(model = coverModel)
+    val coverDominant = rememberDominantColor(
+        (coverPainter.state as? AsyncImagePainter.State.Success)?.result?.image
+    )
+    val barColor = lerp(SpotifyTokens.Bar, coverDominant ?: SpotifyTokens.Bar, 0.65f)
 
     // Spotify only shows the now-playing bar while something is queued.
     if (playerUiState.queue.isEmpty()) return
@@ -148,7 +162,7 @@ internal fun FloatingPlayerContent(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(8.dp))
-                .background(SpotifyTokens.Bar)
+                .background(barColor)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
@@ -166,8 +180,8 @@ internal fun FloatingPlayerContent(
                             .background(SpotifyTokens.Highlight),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (coverModel != null) AsyncImage(
-                            model = coverModel,
+                        if (coverModel != null) androidx.compose.foundation.Image(
+                            painter = coverPainter,
                             contentDescription = playerUiState.title,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -200,6 +214,19 @@ internal fun FloatingPlayerContent(
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clickable(onClick = onExpandLyrics),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        MillenniumIcon(
+                            imageVector = Iconsax.SpotifyLyrics,
+                            contentDescription = stringResource(Res.string.player_lyrics),
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.White
                         )
                     }
                     heartButton()

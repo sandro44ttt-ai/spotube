@@ -626,6 +626,15 @@
     <string name="collection_details_unfollow">Non seguire più</string>
     <string name="collection_details_edit_playlist">Modifica playlist</string>
     <string name="collection_details_by_owner">Di %1$s</string>
+    <string name="collection_details_spotify_verified">Spotify</string>
+    <string name="collection_details_duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="collection_details_duration_minutes">%1$d min</string>
+    <string name="collection_details_stats_join">%1$s • %2$s</string>
+    <string name="explicit_label">Esplicito</string>
+    <plurals name="collection_details_track_count">
+        <item quantity="one">%1$d brano</item>
+        <item quantity="other">%1$d brani</item>
+    </plurals>
 
     <!-- Track options -->
     <string name="track_options_title">Opzioni brano</string>
@@ -727,6 +736,7 @@
     <string name="player_expand_lyrics_content_description">Espandi testo</string>
     <string name="player_now_playing">In riproduzione</string>
     <string name="player_lyrics">Testo</string>
+    <string name="player_add_to_playlist_content_description">Aggiungi a playlist</string>
     <string name="player_alternative_source">Fonte alternativa</string>
     <string name="player_alternative_source_content_description">Fonte alternativa</string>
     <string name="player_download">Scarica</string>

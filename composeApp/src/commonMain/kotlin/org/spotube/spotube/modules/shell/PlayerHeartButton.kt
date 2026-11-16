@@ -21,9 +21,19 @@ package org.spotube.spotube.modules.shell
 import org.spotube.millennium.composables.MillenniumIcon
 import org.spotube.millennium.composables.MillenniumIconButton
 import org.spotube.millennium.composables.MillenniumIconButtonStyle
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 import org.spotube.spotube.core.ui.theming.AppTheme
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,10 +50,16 @@ import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.player_like_content_description
 import spotube.composeapp.generated.resources.player_unlike_content_description
 
+enum class PlayerSaveButtonStyle {
+    Heart,
+    MiniPlus
+}
+
 @Composable
 fun PlayerHeartButton(
     audioPlayerQueue: AudioPlayerQueue,
-    savedTracksViewModel: SavedTracksViewModel) {
+    savedTracksViewModel: SavedTracksViewModel,
+    style: PlayerSaveButtonStyle = PlayerSaveButtonStyle.Heart) {
     val currentQueueEntry by audioPlayerQueue.currentQueueEntryFlow.collectAsStateWithLifecycle()
     val currentTrackId = (currentQueueEntry as? QueueEntry.StreamingTrack)?.track?.id
     val isSavedTrackState =
@@ -62,10 +78,40 @@ fun PlayerHeartButton(
         onClick = { currentTrackId?.let { savedTracksViewModel.toggleSavedTrack(it, isLiked) } },
         enabled = isSavedTrackState is SavedState.Success,
         loading = currentTrackId != null && currentTrackId in pendingSavedTrackIds,
-        style = MillenniumIconButtonStyle.Secondary) {
-        MillenniumIcon(
-            imageVector = if (isLiked) Iconsax.IconsaxHeart2 else Iconsax.IconsaxHeart,
-            contentDescription = stringResource(if (isLiked) Res.string.player_unlike_content_description else Res.string.player_like_content_description),
-            tint = if (isLiked) AppTheme.colors.primary else AppTheme.colors.onSurfaceVariant)
+        style = if (style == PlayerSaveButtonStyle.MiniPlus) {
+            MillenniumIconButtonStyle.Quiet
+        } else {
+            MillenniumIconButtonStyle.Secondary
+        }) {
+        if (style == PlayerSaveButtonStyle.MiniPlus) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .then(
+                        if (isLiked) {
+                            Modifier.background(SpotifyTokens.Green)
+                        } else {
+                            Modifier.border(1.dp, Color.White, CircleShape)
+                        }
+                    ),
+                contentAlignment = Alignment.Center) {
+                MillenniumIcon(
+                    imageVector = if (isLiked) Iconsax.SpotifyCheck else Iconsax.SpotifyPlus,
+                    contentDescription = stringResource(
+                        if (isLiked) {
+                            Res.string.player_unlike_content_description
+                        } else {
+                            Res.string.player_like_content_description
+                        }),
+                    modifier = Modifier.size(16.dp),
+                    tint = if (isLiked) SpotifyTokens.Base else Color.White)
+            }
+        } else {
+            MillenniumIcon(
+                imageVector = if (isLiked) Iconsax.IconsaxHeart2 else Iconsax.IconsaxHeart,
+                contentDescription = stringResource(if (isLiked) Res.string.player_unlike_content_description else Res.string.player_like_content_description),
+                tint = if (isLiked) AppTheme.colors.primary else AppTheme.colors.onSurfaceVariant)
+        }
     }
 }

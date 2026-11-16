@@ -84,6 +84,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
+import coil3.compose.rememberAsyncImagePainter
 import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
 import org.spotube.spotube.core.audioplayer.AudioPlayerQueue
 import org.spotube.spotube.core.audioplayer.LoopState
@@ -99,6 +101,7 @@ import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayerAction
 import org.spotube.spotube.core.ui.component.spotify.SpotifySeekBar
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.component.spotify.spotifyPlayerTintBrush
+import org.spotube.spotube.core.ui.media.rememberDominantColor
 import org.spotube.spotube.modules.downloads.DownloadProgressIcon
 import org.spotube.spotube.modules.downloads.DownloadStatus
 import org.spotube.spotube.modules.downloads.DownloadsViewModel
@@ -137,6 +140,7 @@ import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.downloads_status_cancelled
 import spotube.composeapp.generated.resources.downloads_status_failed
 import spotube.composeapp.generated.resources.downloads_status_queued
+import spotube.composeapp.generated.resources.explicit_label
 import spotube.composeapp.generated.resources.player_alternative_source
 import spotube.composeapp.generated.resources.player_collapse_content_description
 import spotube.composeapp.generated.resources.player_disable_shuffle_content_description
@@ -222,6 +226,10 @@ fun AppExpandedPlayer(
     val albumArtModifier =
         rememberSharedAlbumArtModifier(sharedTransitionScope, animatedVisibilityScope)
     val coverModel = playerUiState.coverModel
+    val coverPainter = rememberAsyncImagePainter(model = coverModel)
+    val coverDominant = rememberDominantColor(
+        (coverPainter.state as? AsyncImagePainter.State.Success)?.result?.image
+    )
     var isSeeking by remember { mutableStateOf(false) }
     var seekProgress by remember { mutableFloatStateOf(playerUiState.progress) }
     val moreOptionsSheetState = rememberModalBottomSheetState(
@@ -296,7 +304,8 @@ fun AppExpandedPlayer(
             .fillMaxSize()
             .background(
                 spotifyPlayerTintBrush(
-                    currentTrack?.album?.id ?: currentTrack?.id ?: playerUiState.title
+                    currentTrack?.album?.id ?: currentTrack?.id ?: playerUiState.title,
+                    coverDominant
                 )
             )
     ) {
@@ -519,8 +528,8 @@ fun AppExpandedPlayer(
                         .clip(RoundedCornerShape(8.dp))
                         .background(AppTheme.colors.surfaceContainerHighest)
                 ) {
-                    AsyncImage(
-                        model = coverModel,
+                    androidx.compose.foundation.Image(
+                        painter = coverPainter,
                         contentDescription = playerUiState.title,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -562,7 +571,7 @@ fun AppExpandedPlayer(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (currentTrack?.explicit == true) {
-                            SpotifyExplicitBadge()
+                            SpotifyExplicitBadge(label = stringResource(Res.string.explicit_label))
                         }
                         PlayerArtistsText(
                             artists = playerUiState.artistList,

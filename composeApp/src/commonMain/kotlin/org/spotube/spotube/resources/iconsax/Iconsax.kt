@@ -345,4 +345,106 @@ object Iconsax {
 
     @Suppress("ObjectPropertyName")
     private var _SpotifyQueueGlyph: ImageVector? = null
+
+    /** Exact Spotify back arrow (`encore_icon_arrow_left_24`). */
+    val SpotifyArrowLeft: ImageVector
+        get() {
+            if (_SpotifyArrowLeft != null) return _SpotifyArrowLeft!!
+            _SpotifyArrowLeft = ImageVector.Builder(
+                name = "SpotifyArrowLeft",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M13.414,3.5a0.999,0.999 0,0 0,-1.707 -0.707l-9.207,9.2 9.207,9.202a1,1 0,1 0,1.414 -1.413L6.335,13H20.5a1,1 0,0 0,0 -2H6.322l6.799,-6.794a1,1 0,0 0,0.293 -0.707z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyArrowLeft!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyArrowLeft: ImageVector? = null
+
+    /** Exact Spotify vertical overflow glyph (`encore_icon_more_android_24`). */
+    val SpotifyMoreVertical: ImageVector
+        get() {
+            if (_SpotifyMoreVertical != null) return _SpotifyMoreVertical!!
+            _SpotifyMoreVertical = ImageVector.Builder(
+                name = "SpotifyMoreVertical",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M10.5,4.5a1.5,1.5 0,1 0,3 0,1.5 1.5,0 0,0 -3,0m0,15a1.5,1.5 0,1 0,3 0,1.5 1.5,0 0,0 -3,0m0,-7.5a1.5,1.5 0,1 0,3 0,1.5 1.5,0 0,0 -3,0"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyMoreVertical!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyMoreVertical: ImageVector? = null
+
+    /** Exact Spotify check glyph (`encore_icon_check_24`). */
+    val SpotifyCheck: ImageVector
+        get() {
+            if (_SpotifyCheck != null) return _SpotifyCheck!!
+            _SpotifyCheck = ImageVector.Builder(
+                name = "SpotifyCheck",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M21.707,4.805a1,1 0,0 1,0 1.414L8.024,19.902l-5.731,-5.73a1,1 0,1 1,1.414 -1.415l4.317,4.317L20.293,4.805a1,1 0,0 1,1.414 0"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyCheck!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyCheck: ImageVector? = null
+
+    /** Exact Spotify download glyph (`encore_icon_download_24`). */
+    val SpotifyDownload: ImageVector
+        get() {
+            if (_SpotifyDownload != null) return _SpotifyDownload!!
+            _SpotifyDownload = ImageVector.Builder(
+                name = "SpotifyDownload",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M12,3a9,9 0,1 0,0 18,9,9 0,0,0 0,-18M1,12C1,5.925 5.925,1 12,1s11,4.925 11,11 -4.925,11 -11,11S1,18.075 1,12"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+                addPath(
+                    pathData = addPathNodes(
+                        "M12,6.05a1,1 0,0 1,1 1v7.486l1.793,-1.793a1,1 0,1 1,1.414 1.414L12,18.364l-4.207,-4.207a1,1 0,1 1,1.414 -1.414L11,14.536V7.05a1,1 0,0 1,1 -1"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyDownload!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyDownload: ImageVector? = null
 }

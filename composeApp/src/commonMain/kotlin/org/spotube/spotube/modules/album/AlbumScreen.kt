@@ -99,6 +99,7 @@ fun AlbumScreen(
         trackCount = (album as? org.spotube.plugin_interfaces.plugin_apis.metadata.album.MetadataAlbum.Detailed)?.trackCount
             ?: dataState?.tracks?.size ?: 0,
         totalDurationMs = dataState?.tracks?.sumOf { it.durationMs } ?: 0L,
+        shareUrl = album?.externalUri,
         hasMore = dataState?.nextPagination != null,
         isLoadingNextPage = state is AlbumScreenState.Data.LoadingMore,
         currentTrackId = trackOptionsContext.currentTrackId,

@@ -142,6 +142,7 @@ fun PlaylistScreen(
         tracks = dataState?.tracks ?: emptyList(),
         trackCount = playlist?.trackCount ?: dataState?.tracks?.size ?: 0,
         totalDurationMs = dataState?.tracks?.sumOf { it.durationMs } ?: 0L,
+        shareUrl = playlist?.externalUri,
         hasMore = dataState?.nextPagination != null,
         isLoadingNextPage = state is PlaylistScreenState.Data.LoadingMore,
         currentTrackId = trackOptionsContext.currentTrackId,

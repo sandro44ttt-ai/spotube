@@ -304,7 +304,7 @@ internal fun CompactPlayerOverlay(
     onQueue: () -> Unit,
     onAlternativeSource: () -> Unit,
     onExpandLyrics: () -> Unit,
-    floatingPlayer: @Composable (Modifier) -> Unit = { AppFloatingPlayer(modifier = it) },
+    floatingPlayer: @Composable (Modifier) -> Unit = { AppFloatingPlayer(modifier = it, onExpandLyrics = onExpandLyrics) },
     expandedPlayer: @Composable (modifier: Modifier, onCollapse: () -> Unit) -> Unit = { modifier, onCollapse ->
         AppExpandedPlayer(
             modifier = modifier,

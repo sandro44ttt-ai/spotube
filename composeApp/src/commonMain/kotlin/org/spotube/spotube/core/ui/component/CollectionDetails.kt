@@ -60,11 +60,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
+import coil3.compose.rememberAsyncImagePainter
+import org.spotube.spotube.core.ui.media.rememberDominantColor
 import org.spotube.spotube.core.ui.misc.TextWithShimmer
 import org.spotube.spotube.core.ui.misc.shimmerApply
 import org.spotube.spotube.core.ui.component.spotify.SpotifyOutlineCircleIconButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayPillButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
+import org.spotube.spotube.core.ui.component.spotify.spotifyCollectionHeaderBrush
 import org.spotube.spotube.resources.iconsax.Iconsax
 import org.spotube.spotube.resources.iconsax.IconsaxAddSquare
 import org.spotube.spotube.resources.iconsax.IconsaxEdit
@@ -106,18 +110,27 @@ fun CollectionDetails(
     showFollowButton: Boolean = true,
     onEdit: (() -> Unit)? = null,
     statsText: String? = null,
+    onDownload: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
     sharedElementKey: String? = null) {
+    val isCompact = currentWindowWidthBreakpoint() isBelow WindowBreakpoints.Medium
+    val headerPainter = rememberAsyncImagePainter(model = imageURL)
+    val dominantColor = rememberDominantColor(
+        (headerPainter.state as? AsyncImagePainter.State.Success)?.result?.image
+    )
     Box(
         modifier = modifier
             .fillMaxWidth()
             .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF2A2A2A), Color(0xFF121212))
-                )
+                if (isCompact) {
+                    spotifyCollectionHeaderBrush(dominantColor)
+                } else {
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF2A2A2A), Color(0xFF121212))
+                    )
+                }
             )
     ) {
-        val isCompact = currentWindowWidthBreakpoint() isBelow WindowBreakpoints.Medium
-
         val sharedTransitionScope = LocalSharedTransitionScope.current
         val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
@@ -315,8 +328,8 @@ fun CollectionDetails(
                             .height(340.dp),
                         contentAlignment = Alignment.BottomStart) {
                         if (imageURL.isNotBlank()) {
-                            AsyncImage(
-                                model = imageURL,
+                            androidx.compose.foundation.Image(
+                                painter = headerPainter,
                                 contentDescription = title,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop)
@@ -404,27 +417,90 @@ fun CollectionDetails(
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .width(40.dp)
+                                    .height(52.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .border(
+                                        1.dp,
+                                        Color.White.copy(alpha = 0.22f),
+                                        RoundedCornerShape(4.dp))
+                                    .clickable(onClick = onPlay),
+                                contentAlignment = Alignment.Center) {
+                                if (imageURL.isNotBlank()) {
+                                    androidx.compose.foundation.Image(
+                                        painter = headerPainter,
+                                        contentDescription = title,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop)
+                                } else if (imageResource != null) {
+                                    androidx.compose.foundation.Image(
+                                        painter = painterResource(imageResource),
+                                        contentDescription = title,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop)
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
                             if (showFollowButton) {
                                 Box(
                                     modifier = Modifier
                                         .size(40.dp)
                                         .clip(CircleShape)
-                                        .border(1.dp, SpotifyTokens.Outline, CircleShape)
+                                        .then(
+                                            if (isFollowing) {
+                                                Modifier.background(SpotifyTokens.Green)
+                                            } else {
+                                                Modifier.border(1.dp, SpotifyTokens.Outline, CircleShape)
+                                            }
+                                        )
                                         .clickable(onClick = onFollowClick),
                                     contentAlignment = Alignment.Center) {
                                     MillenniumIcon(
-                                        imageVector = if (isFollowing) Iconsax.SpotifyHeart else Iconsax.IconsaxHeart,
+                                        imageVector = if (isFollowing) Iconsax.SpotifyCheck else Iconsax.SpotifyPlus,
                                         contentDescription = stringResource(
                                             if (isFollowing) {
                                                 Res.string.collection_details_unfollow
                                             } else {
                                                 Res.string.collection_details_follow
                                             }),
-                                        modifier = Modifier.size(20.dp),
-                                        tint = if (isFollowing) SpotifyTokens.Green else Color.White)
+                                        modifier = Modifier.size(22.dp),
+                                        tint = if (isFollowing) SpotifyTokens.Base else Color.White)
                                 }
-                                Spacer(Modifier.width(12.dp))
+                                Spacer(Modifier.width(10.dp))
                             }
+                            if (onDownload != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, SpotifyTokens.Outline, CircleShape)
+                                        .clickable(onClick = onDownload),
+                                    contentAlignment = Alignment.Center) {
+                                    MillenniumIcon(
+                                        imageVector = Iconsax.SpotifyDownload,
+                                        contentDescription = stringResource(Res.string.player_download),
+                                        modifier = Modifier.size(22.dp),
+                                        tint = Color.White)
+                                }
+                                Spacer(Modifier.width(10.dp))
+                            }
+                            if (onShare != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .clickable(onClick = onShare),
+                                    contentAlignment = Alignment.Center) {
+                                    MillenniumIcon(
+                                        imageVector = Iconsax.SpotifyShareGlyph,
+                                        contentDescription = stringResource(Res.string.track_options_share),
+                                        modifier = Modifier.size(22.dp),
+                                        tint = Color.White)
+                                }
+                            }
+                            Spacer(Modifier.weight(1f))
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
@@ -437,7 +513,7 @@ fun CollectionDetails(
                                     modifier = Modifier.size(24.dp),
                                     tint = SpotifyTokens.Green)
                             }
-                            Spacer(Modifier.weight(1f))
+                            Spacer(Modifier.width(6.dp))
                             Box(
                                 modifier = Modifier
                                     .size(56.dp)
