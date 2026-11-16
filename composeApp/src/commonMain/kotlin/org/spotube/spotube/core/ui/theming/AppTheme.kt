@@ -23,6 +23,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
+import org.jetbrains.compose.resources.Font
+import spotube.composeapp.generated.resources.Figtree_Variable
+import spotube.composeapp.generated.resources.Res
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -157,9 +160,10 @@ private fun spotifyStyle(
     size: Int,
     lineHeight: Int,
     weight: FontWeight = FontWeight.Normal,
-    letterSpacing: Float = 0f
+    letterSpacing: Float = 0f,
+    family: FontFamily = FontFamily.SansSerif
 ): TextStyle = TextStyle(
-    fontFamily = FontFamily.SansSerif, // TODO: replace with Spotify Mix / Inter when bundled
+    fontFamily = family,
     fontSize = size.sp,
     lineHeight = lineHeight.sp,
     fontWeight = weight,
@@ -174,20 +178,23 @@ private fun spotifyStyle(
  * - Label: 14/20 Medium (labelLarge), 12/16 Medium (labelMedium), 11/16 Medium (labelSmall)
  * - Button: 14/20 SemiBold (used in MillenniumButtonTheme)
  */
-val AppDefaultTypography = AppTypography(
-    displaySmall = spotifyStyle(36, 44, FontWeight.Bold),      // not used, kept for compat
-    headlineLarge = spotifyStyle(32, 40, FontWeight.Bold),      // Playlist/Album hero titles
-    headlineMedium = spotifyStyle(28, 36, FontWeight.Bold),     // Section headers large
-    headlineSmall = spotifyStyle(24, 32, FontWeight.Bold),      // Card titles
-    titleLarge = spotifyStyle(22, 28, FontWeight.SemiBold),     // Toolbar titles
-    titleMedium = spotifyStyle(16, 24, FontWeight.Medium),      // List item titles
-    titleSmall = spotifyStyle(14, 20, FontWeight.Medium),       // Small card titles
-    bodyLarge = spotifyStyle(16, 24),                           // Body text large
-    bodyMedium = spotifyStyle(14, 20),                          // Standard body
-    bodySmall = spotifyStyle(12, 16),                           // Captions, metadata
-    labelLarge = spotifyStyle(14, 20, FontWeight.Medium),       // Button labels, tabs
-    labelMedium = spotifyStyle(12, 16, FontWeight.Medium),      // Small labels
-    labelSmall = spotifyStyle(11, 16, FontWeight.Medium)        // Tiny labels
+val AppDefaultTypography = spotifyTypography(FontFamily.SansSerif)
+
+/** Spotify type scale rendered with a specific family (the bundled Figtree in the app). */
+fun spotifyTypography(family: FontFamily): AppTypography = AppTypography(
+    displaySmall = spotifyStyle(36, 44, FontWeight.Bold, family = family),      // not used, kept for compat
+    headlineLarge = spotifyStyle(32, 40, FontWeight.Bold, family = family),      // Playlist/Album hero titles
+    headlineMedium = spotifyStyle(28, 36, FontWeight.Bold, family = family),     // Section headers large
+    headlineSmall = spotifyStyle(24, 32, FontWeight.Bold, family = family),      // Card titles
+    titleLarge = spotifyStyle(22, 28, FontWeight.SemiBold, family = family),     // Toolbar titles
+    titleMedium = spotifyStyle(16, 24, FontWeight.Medium, family = family),      // List item titles
+    titleSmall = spotifyStyle(14, 20, FontWeight.Medium, family = family),       // Small card titles
+    bodyLarge = spotifyStyle(16, 24, family = family),                           // Body text large
+    bodyMedium = spotifyStyle(14, 20, family = family),                          // Standard body
+    bodySmall = spotifyStyle(12, 16, family = family),                           // Captions, metadata
+    labelLarge = spotifyStyle(14, 20, FontWeight.Medium, family = family),       // Button labels, tabs
+    labelMedium = spotifyStyle(12, 16, FontWeight.Medium, family = family),      // Small labels
+    labelSmall = spotifyStyle(11, 16, FontWeight.Medium, family = family)        // Tiny labels
 )
 
 /** Corner shapes matching Spotify's radius scale: 8dp (cards), 12dp (sheets), 16dp (modals), 48dp (pill buttons). */
@@ -528,6 +535,10 @@ fun SpotubeTheme(
         Theme.SYSTEM -> true // TODO: wire real system dark detection
     }
     val palette: MillenniumPalette = settings.palette
+    val appFontFamily = FontFamily(
+        Font(Res.font.Figtree_Variable, weight = FontWeight.Normal)
+    )
+    val appTypography = remember(appFontFamily) { spotifyTypography(appFontFamily) }
 
     MillenniumTheme(
         dark = isDarkTheme,
@@ -542,7 +553,7 @@ fun SpotubeTheme(
         MillenniumTooltipHost {
             CompositionLocalProvider(
                 LocalAppColors provides colors,
-                LocalAppTypography provides AppDefaultTypography,
+                LocalAppTypography provides appTypography,
                 LocalAppShapes provides AppDefaultShapes,
                 content = content
             )
