@@ -95,11 +95,12 @@ class StreamingUrlRepository(
             it is QueueEntry.StreamingTrack && it.track.id == trackId
         } as QueueEntry.StreamingTrack?
 
-        if (queueEntry == null) {
+        val track = queueEntry?.track ?: StreamTrackRegistry.find(trackId)
+        if (track == null) {
             logger.v { "Track $trackId is not present in current queue" }
             return null
         }
-        return resolveStreamInfo(queueEntry.track, forceRefresh)
+        return resolveStreamInfo(track, forceRefresh)
     }
 
     suspend fun resolveStreamInfo(

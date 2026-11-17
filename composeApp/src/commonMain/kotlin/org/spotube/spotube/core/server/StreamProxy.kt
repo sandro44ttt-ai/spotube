@@ -83,6 +83,7 @@ internal class StreamProxy(
             .filterIsInstance<QueueEntry.StreamingTrack>()
             .firstOrNull { it.track.id == trackId }
             ?.track
+            ?: StreamTrackRegistry.find(trackId)
     }
 
     suspend fun handleStreamRequest(call: ApplicationCall, requestMethod: HttpMethod) {

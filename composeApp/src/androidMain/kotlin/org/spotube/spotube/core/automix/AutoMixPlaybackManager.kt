@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.spotube.plugin_interfaces.plugin_apis.metadata.track.MetadataTrack
+import org.spotube.spotube.core.server.StreamTrackRegistry
 import org.spotube.spotube.media.AutoMixForegroundService
 import org.spotube.spotube.modules.plugin.PluginProvider
 import org.spotube.spotube.modules.settings.SettingsProvider
@@ -158,6 +159,7 @@ class AutoMixPlaybackManager(
         val ordered = smartOrder(tracks)
         val startIndex = chooseStartIndex(ordered)
         queue.addAll(ordered.drop(startIndex) + ordered.take(startIndex))
+        StreamTrackRegistry.registerAll(queue)
         lastStartTrackId = queue.firstOrNull()?.id
         index = 0
         activeIsA = true
@@ -195,6 +197,7 @@ class AutoMixPlaybackManager(
         deckB.clearMediaItems()
         current = null
         next = null
+        StreamTrackRegistry.unregisterAll(queue.map { it.id })
         queue.clear()
         features.clear()
         activeSpeed = 1f
@@ -348,7 +351,9 @@ class AutoMixPlaybackManager(
         if (target == null) {
             scope.launch {
                 val additions = fetchRecommendations(queue.takeLast(5), queue.map { it.id }.toSet())
+                if (!isStarted) return@launch
                 queue.addAll(if (additions.isNotEmpty()) additions else queue)
+                StreamTrackRegistry.registerAll(additions)
                 next = queue.getOrNull(index + 1)
                 next?.let { loadTrack(idlePlayer(), it, 0f) }
                 ensureAnalysis()
