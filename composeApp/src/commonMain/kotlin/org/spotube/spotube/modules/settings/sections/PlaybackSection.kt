@@ -23,6 +23,11 @@ import androidx.compose.foundation.lazy.LazyListScope
 
 import org.spotube.spotube.core.ui.theming.AppTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import org.spotube.spotube.core.ui.component.MixLabDialog
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.ChevronRight
 import compose.icons.feathericons.Cast
@@ -119,6 +124,28 @@ internal fun LazyListScope.playbackSection(
                     }
                 }
             )
+        }
+        add {
+            var showMixLab by remember { mutableStateOf(false) }
+            SettingCardItem(
+                title = stringResource(Res.string.settings_mix_lab_title),
+                subtitle = stringResource(Res.string.settings_mix_lab_subtitle),
+                icon = {
+                    SettingsItemIcon(
+                        Iconsax.IconsaxMusicPlay,
+                        stringResource(Res.string.settings_mix_lab_title)
+                    )
+                },
+                trailingContent = {
+                    MillenniumIcon(
+                        imageVector = FeatherIcons.ChevronRight,
+                        contentDescription = stringResource(Res.string.settings_mix_lab_title),
+                        tint = AppTheme.colors.onSurfaceVariant)
+                },
+                onClick = { showMixLab = true })
+            MixLabDialog(
+                visible = showMixLab,
+                onDismiss = { showMixLab = false })
         }
         addAll(remoteControlSettingCards(settings, settingsViewModel, requestLocalNetworkPermission))
         add {
