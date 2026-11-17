@@ -89,6 +89,7 @@ import coil3.compose.rememberAsyncImagePainter
 import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
 import org.spotube.spotube.core.audioplayer.AudioPlayerQueue
 import org.spotube.spotube.core.audioplayer.LoopState
+import org.spotube.spotube.core.audioplayer.PlayerState
 import org.spotube.spotube.core.audioplayer.QueueEntry
 import org.spotube.spotube.core.jam.JamRole
 import org.spotube.spotube.core.jam.JamRoomService
@@ -96,6 +97,7 @@ import org.spotube.spotube.core.navigation.NavigationCommands
 import org.spotube.spotube.core.navigation.Routes
 import org.spotube.spotube.core.share.ShareService
 import org.spotube.spotube.core.ui.component.spotify.SpotifyCircleAddButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyBufferingIndicator
 import org.spotube.spotube.core.ui.component.spotify.SpotifyExplicitBadge
 import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayerAction
 import org.spotube.spotube.core.ui.component.spotify.SpotifySeekBar
@@ -583,12 +585,16 @@ fun AppExpandedPlayer(
                             .clickable(onClick = ::onPlayPause),
                         contentAlignment = Alignment.Center
                     ) {
-                        MillenniumIcon(
-                            if (playerUiState.isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
-                            contentDescription = stringResource(if (playerUiState.isPlaying) Res.string.player_pause_content_description else Res.string.player_play_content_description),
-                            modifier = Modifier.size(30.dp),
-                            tint = Color.Black
-                        )
+                        if (playerUiState.playerState == PlayerState.BUFFERING) {
+                            SpotifyBufferingIndicator(size = 28.dp, color = Color.Black)
+                        } else {
+                            MillenniumIcon(
+                                if (playerUiState.isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
+                                contentDescription = stringResource(if (playerUiState.isPlaying) Res.string.player_pause_content_description else Res.string.player_play_content_description),
+                                modifier = Modifier.size(30.dp),
+                                tint = Color.Black
+                            )
+                        }
                     }
                     MillenniumIconButton(
                         onClick = ::onSkipNext,

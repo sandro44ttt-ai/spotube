@@ -27,8 +27,11 @@
     <string name="queue_filter_queue">Filter queue...</string>
     <string name="queue_no_queue_entries">No queue entries</string>
 
-    <string name="search_placeholder">Search songs, artists, albums...</string>
+    <string name="search_placeholder">What do you want to play?</string>
     <string name="search_clear_history">Clear all history</string>
+    <string name="search_recent_searches">Recent searches</string>
+    <string name="search_browse_all">Browse all</string>
+    <string name="search_browse_empty">No categories available</string>
     <string name="search_filter_placeholder">Search...</string>
 
     <!-- Library toolbar -->

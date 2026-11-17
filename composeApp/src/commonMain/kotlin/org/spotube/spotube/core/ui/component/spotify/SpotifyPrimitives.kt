@@ -18,6 +18,11 @@
 package org.spotube.spotube.core.ui.component.spotify
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,6 +59,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -884,6 +891,37 @@ fun SpotifyCircleAddButton(
             contentDescription = contentDescription,
             modifier = Modifier.size(16.dp),
             tint = Color.White
+        )
+    }
+}
+
+/** Spotify-style circular buffering indicator used by the players. */
+@Composable
+fun SpotifyBufferingIndicator(
+    size: Dp = 24.dp,
+    color: Color = Color.White
+) {
+    val transition = rememberInfiniteTransition(label = "spotify-buffering")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+        ),
+        label = "spotify-buffering-rotation"
+    )
+    Canvas(
+        modifier = Modifier
+            .size(size)
+            .graphicsLayer { rotationZ = rotation }
+    ) {
+        drawArc(
+            color = color,
+            startAngle = 0f,
+            sweepAngle = 270f,
+            useCenter = false,
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
         )
     }
 }

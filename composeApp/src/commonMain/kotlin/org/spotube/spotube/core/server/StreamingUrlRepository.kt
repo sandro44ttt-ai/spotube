@@ -36,6 +36,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import kotlin.math.abs
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 data class CachedStreamUrl(
@@ -78,7 +79,7 @@ class StreamingUrlRepository(
     private val audioPlayerQueue: AudioPlayerQueue,
     private val matchedTracksRepository: TrackSourceRepository,
     private val settingsRepository: UserSettingsSource,
-    private val streamUrlCacheTtlMs: Long = 30.seconds.inWholeMilliseconds) : KoinComponent {
+    private val streamUrlCacheTtlMs: Long = 10.minutes.inWholeMilliseconds) : KoinComponent {
 
     private val logger by injectLogger<StreamingUrlRepository>()
     private val streamUrlCacheMutex = Mutex()

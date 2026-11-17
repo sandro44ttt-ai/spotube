@@ -27,8 +27,11 @@
     <string name="queue_filter_queue">Filtra coda...</string>
     <string name="queue_no_queue_entries">La coda è vuota</string>
 
-    <string name="search_placeholder">Cerca brani, artisti, album...</string>
+    <string name="search_placeholder">Cosa vuoi ascoltare?</string>
     <string name="search_clear_history">Cancella tutta la cronologia</string>
+    <string name="search_recent_searches">Ricerche recenti</string>
+    <string name="search_browse_all">Sfoglia tutto</string>
+    <string name="search_browse_empty">Nessuna categoria disponibile</string>
     <string name="search_filter_placeholder">Cerca...</string>
 
     <!-- Library toolbar -->

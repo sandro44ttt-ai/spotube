@@ -679,4 +679,28 @@ object Iconsax {
 
     @Suppress("ObjectPropertyName")
     private var _SpotifyPlusGlyph: ImageVector? = null
+
+    /** Exact Spotify close glyph (`encore_icon_x_24`). */
+    val SpotifyX: ImageVector
+        get() {
+            if (_SpotifyX != null) return _SpotifyX!!
+            _SpotifyX = ImageVector.Builder(
+                name = "SpotifyX",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M3.293,3.293a1,1 0,0 1,1.414 0L12,10.586l7.293,-7.293a1,1 0,1 1,1.414 1.414L13.414,12l7.293,7.293a1,1 0,0 1,-1.414 1.414L12,13.414l-7.293,7.293a1,1 0,0 1,-1.414 -1.414L10.586,12 3.293,4.707a1,1 0,0 1,0 -1.414"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyX!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyX: ImageVector? = null
 }

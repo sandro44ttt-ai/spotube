@@ -19,6 +19,7 @@ package org.spotube.spotube.core.audioplayer
 
 import org.spotube.plugin_interfaces.plugin_apis.audio.StreamProtocol
 import org.spotube.spotube.core.di.injectLogger
+import org.spotube.spotube.core.server.StreamingUrlRepository
 import org.spotube.spotube.modules.blacklist.BlacklistRepository
 import org.spotube.spotube.modules.library.local_tracks.media.LocalMediaCacheRepository
 import org.spotube.spotube.modules.plugin.PluginProvider
@@ -27,7 +28,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +45,8 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 class DeviceAudioPlayerQueue(
     private val audioPlayer: AudioPlayerInterface,
@@ -59,6 +64,8 @@ class DeviceAudioPlayerQueue(
     private val collectionHistoryState = MutableStateFlow<List<QueueCollectionEntry>>(emptyList())
 
     private var isRestoringPersistedState = true
+    private var prefetchJob: Job? = null
+    private var startupMark: TimeMark? = null
 
     // Eagerly: callers read `.value` (the stream proxy looks up the track it's asked to play,
     // Jam follows the room). With WhileSubscribed, `.value` went stale whenever nothing on
@@ -103,6 +110,18 @@ class DeviceAudioPlayerQueue(
             audioPlayer.currentMediaItemFlow.collect {
                 logger.d { "Current media item changed, persisting queue state" }
                 persistQueueStateIfReady()
+                scheduleNextTrackPrefetch()
+            }
+        }
+
+        scope.launch {
+            audioPlayer.playerStateFlow.collect { state ->
+                if (state == PlayerState.PLAYING) {
+                    startupMark?.let { mark ->
+                        logger.i { "[Startup] playback started after ${mark.elapsedNow()}" }
+                    }
+                    startupMark = null
+                }
             }
         }
 
@@ -143,6 +162,7 @@ class DeviceAudioPlayerQueue(
         logger.d { "Normalized start position: $startPosition -> $normalizedStartPosition" }
         entryByMediaUrl.value = entriesByUrl(resolved)
         updateCollectionContext(collectionEntry)
+        startupMark = TimeSource.Monotonic.markNow()
         audioPlayer.load(mediaItems, autoPlay, normalizedStartPosition)
         persistQueueStateIfReady()
         logger.i { "Queue loaded successfully" }
@@ -248,6 +268,7 @@ class DeviceAudioPlayerQueue(
 
         val normalizedIndex = index.coerceIn(0, queueSize - 1)
         logger.d { "Jumping to queue index $index (normalized: $normalizedIndex), autoPlay=$autoPlay" }
+        startupMark = TimeSource.Monotonic.markNow()
         audioPlayer.jumpTo(normalizedIndex)
         if (autoPlay) {
             audioPlayer.play()
@@ -509,6 +530,33 @@ class DeviceAudioPlayerQueue(
             val updated = listOf(collectionEntry) + history.filterNot { it == collectionEntry }
             logger.v { "Collection history updated, size now: ${updated.size}" }
             updated
+        }
+    }
+
+    private fun scheduleNextTrackPrefetch() {
+        prefetchJob?.cancel()
+        prefetchJob = scope.launch {
+            delay(1_500)
+            val entries = queueFlow.value
+            val current = currentQueueEntryFlow.value ?: return@launch
+            val currentIndex = entries.indexOfFirst { entry ->
+                when {
+                    entry is QueueEntry.StreamingTrack && current is QueueEntry.StreamingTrack ->
+                        entry.track.id == current.track.id
+
+                    entry is QueueEntry.LocalTrack && current is QueueEntry.LocalTrack ->
+                        entry.url == current.url
+
+                    else -> false
+                }
+            }
+            if (currentIndex < 0) return@launch
+            val next = entries.getOrNull(currentIndex + 1) as? QueueEntry.StreamingTrack ?: return@launch
+            runCatching {
+                get<StreamingUrlRepository>().resolveStreamInfo(next.track)
+            }.onFailure { throwable ->
+                logger.d(throwable) { "Prefetch failed for ${next.track.id}" }
+            }
         }
     }
 

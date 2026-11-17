@@ -39,17 +39,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,11 +65,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composeunstyled.Text
 import com.composeunstyled.currentWindowWidthBreakpoint
@@ -87,6 +97,7 @@ import org.spotube.millennium.composables.MillenniumText
 import org.spotube.millennium.theme.MillenniumTheme
 import org.spotube.plugin_interfaces.plugin_apis.metadata.album.MetadataAlbum
 import org.spotube.plugin_interfaces.plugin_apis.metadata.artist.MetadataArtist
+import org.spotube.plugin_interfaces.plugin_apis.metadata.browse.MetadataBrowseGenre
 import org.spotube.plugin_interfaces.plugin_apis.metadata.playlist.MetadataPlaylist
 import org.spotube.plugin_interfaces.plugin_apis.metadata.search.MetadataSupportedSearchType
 import org.spotube.plugin_interfaces.plugin_apis.metadata.track.MetadataTrack
@@ -111,6 +122,8 @@ import org.spotube.spotube.core.ui.component.UserCard
 import org.spotube.spotube.core.ui.component.cards.PlayableCard
 import org.spotube.spotube.core.ui.component.dragScrollable
 import org.spotube.spotube.core.ui.component.spotify.SpotifyChip
+import org.spotube.spotube.core.ui.component.spotify.SpotifySearchBar
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.misc.SkeletonTree
 import org.spotube.spotube.core.ui.theming.AppTheme
 import org.spotube.spotube.getPlatform
@@ -129,6 +142,8 @@ import spotube.composeapp.generated.resources.library_tab_albums
 import spotube.composeapp.generated.resources.library_tab_artists
 import spotube.composeapp.generated.resources.library_tab_playlists
 import spotube.composeapp.generated.resources.search_clear_history
+import spotube.composeapp.generated.resources.search_browse_all
+import spotube.composeapp.generated.resources.search_browse_empty
 import spotube.composeapp.generated.resources.search_loading_albums
 import spotube.composeapp.generated.resources.search_loading_artists
 import spotube.composeapp.generated.resources.search_loading_playlists
@@ -325,18 +340,22 @@ fun SearchScreen(viewModel: SearchScreenViewModel = koinViewModel()) {
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
         if (!isExpanded) {
-            SearchBar(
+            SpotifySearchBar(
                 query = state.query,
                 onQueryChange = viewModel::onQueryChange,
-                recentSearchSuggestions = state.recentSearchSuggestions,
+                recentSearches = state.recentSearchSuggestions,
                 onRecentSearchClick = { search ->
                     viewModel.applyRecentSearch(search)
                     focusManager.clearFocus()
                 },
-                onClearAllRecentSearches = {
+                onClearHistory = {
                     viewModel.clearAllRecentSearches()
                     focusManager.clearFocus()
                 },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(vertical = 8.dp)
             )
         } else {
             ApplicationMainBar(backButton = false)
@@ -350,22 +369,26 @@ fun SearchScreen(viewModel: SearchScreenViewModel = koinViewModel()) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (isExpanded) {
-                    SearchBar(
+                    SpotifySearchBar(
                         query = state.query,
                         onQueryChange = viewModel::onQueryChange,
-                        recentSearchSuggestions = state.recentSearchSuggestions,
+                        recentSearches = state.recentSearchSuggestions,
                         onRecentSearchClick = { search ->
                             viewModel.applyRecentSearch(search)
                             focusManager.clearFocus()
                         },
-                        onClearAllRecentSearches = {
+                        onClearHistory = {
                             viewModel.clearAllRecentSearches()
                             focusManager.clearFocus()
-                        }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(vertical = 8.dp)
                     )
                 }
 
-                if (state.supportedSearchTypes.isNotEmpty()) {
+                if (state.query.isNotBlank() && state.supportedSearchTypes.isNotEmpty()) {
                     SearchTabs(
                         types = state.supportedSearchTypes,
                         selectedType = selectedType,
@@ -375,6 +398,18 @@ fun SearchScreen(viewModel: SearchScreenViewModel = koinViewModel()) {
             }
 
             when {
+                state.query.isBlank() -> {
+                    BrowseAllContent(
+                        genres = state.genres,
+                        isLoading = state.isLoadingGenres,
+                        onGenreClick = { genre ->
+                            viewModel.applyGenreSearch(genre.name)
+                            focusManager.clearFocus()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
                 state.isLoadingSearchTypes -> {
                     SearchLoadingIndicator(
                         modifier = Modifier
@@ -517,75 +552,6 @@ fun SearchScreen(viewModel: SearchScreenViewModel = koinViewModel()) {
 }
 
 @Composable
-private fun SearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    recentSearchSuggestions: List<String>,
-    onRecentSearchClick: (String) -> Unit,
-    onClearAllRecentSearches: () -> Unit
-) {
-    val hasRecentSearchSuggestions = recentSearchSuggestions.isNotEmpty()
-    val searchState = rememberTextFieldState(query)
-
-    LaunchedEffect(searchState) {
-        snapshotFlow { searchState.text.toString() }.collect { onQueryChange(it) }
-    }
-    LaunchedEffect(query) {
-        if (searchState.text.toString() != query) {
-            searchState.edit { replace(0, length, query) }
-        }
-    }
-
-    MillenniumAutocomplete(
-        state = searchState,
-        suggestions = recentSearchSuggestions,
-        onSuggestionSelected = onRecentSearchClick,
-        suggestionLabel = { it },
-        leadingContent = {
-            MillenniumIcon(
-                imageVector = Iconsax.InconsaxClock,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = AppTheme.colors.onSurfaceVariant
-            )
-        },
-        placeholder = stringResource(Res.string.search_placeholder),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 8.dp),
-        menuHeader = if (hasRecentSearchSuggestions) {
-            {
-                MillenniumListTile(
-                    title = {
-                        MillenniumText(
-                            text = stringResource(Res.string.search_clear_history),
-                            color = AppTheme.colors.error,
-                            style = AppTheme.typography.bodyMedium
-                        )
-                    },
-                    leading = {
-                        MillenniumIcon(
-                            imageVector = Iconsax.IconsaxTrash,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = AppTheme.colors.error
-                        )
-                    },
-                    onClick = onClearAllRecentSearches,
-                    minimumHeight = 36.dp,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    leadingSpacing = 8.dp,
-                    shape = AppTheme.shapes.small
-                )
-            }
-        } else {
-            null
-        }
-    )
-}
-
-@Composable
 private fun SearchTabs(
     types: List<MetadataSupportedSearchType>,
     selectedType: MetadataSupportedSearchType?,
@@ -605,6 +571,128 @@ private fun SearchTabs(
                 onClick = { onTabSelected(type) }
             )
         }
+    }
+}
+
+private val GenrePalette = listOf(
+    Color(0xFFE13300),
+    Color(0xFF1E3264),
+    Color(0xFF8D67AB),
+    Color(0xFFE8115B),
+    Color(0xFF148A08),
+    Color(0xFF503750),
+    Color(0xFFBC5900),
+    Color(0xFF0D73EC),
+    Color(0xFF777777),
+    Color(0xFFE91429),
+    Color(0xFF27856A),
+    Color(0xFF8C1932)
+)
+
+@Composable
+private fun BrowseAllContent(
+    genres: List<MetadataBrowseGenre>,
+    isLoading: Boolean,
+    onGenreClick: (MetadataBrowseGenre) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bottomInset = LocalAppShellBottomInset.current
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = modifier,
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 8.dp,
+            bottom = 16.dp + bottomInset),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text(
+                text = stringResource(Res.string.search_browse_all),
+                style = AppTheme.typography.headlineSmall.copy(
+                    fontSize = 28.sp,
+                    lineHeight = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                ),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
+        when {
+            isLoading && genres.isEmpty() -> {
+                items(6) { SkeletonGenreCard() }
+            }
+
+            genres.isEmpty() -> {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = stringResource(Res.string.search_browse_empty),
+                        style = AppTheme.typography.bodyMedium,
+                        color = SpotifyTokens.Muted,
+                        modifier = Modifier.padding(vertical = 24.dp)
+                    )
+                }
+            }
+
+            else -> {
+                itemsIndexed(genres) { index, genre ->
+                    SpotifyGenreCard(
+                        name = genre.name,
+                        index = index,
+                        onClick = { onGenreClick(genre) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpotifyGenreCard(
+    name: String,
+    index: Int,
+    onClick: () -> Unit
+) {
+    val base = GenrePalette[index % GenrePalette.size]
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(96.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(base, lerp(base, Color.Black, 0.35f))
+                )
+            )
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        contentAlignment = Alignment.TopStart
+    ) {
+        Text(
+            text = name,
+            style = AppTheme.typography.titleMedium.copy(
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            ),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun SkeletonGenreCard() {
+    SkeletonTree(true) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(96.dp)
+                .clip(RoundedCornerShape(8.dp))
+        )
     }
 }
 
@@ -667,6 +755,7 @@ private fun SearchAllTab(
     }
 
     val bottomInset = LocalAppShellBottomInset.current
+    val isCompact = currentWindowWidthBreakpoint() isBelow WindowBreakpoints.Medium
     val showTracks =
         MetadataSupportedSearchType.TRACK in supportedSearchTypes && tracks.items.isNotEmpty()
 
@@ -676,6 +765,7 @@ private fun SearchAllTab(
         error = if (showTracks) tracks.error else null,
         hasMore = false,
         simplified = true,
+        flat = isCompact,
         showEmptyMessage = false,
         modifier = modifier,
         onTrackClick = onTrackClick,
@@ -696,8 +786,12 @@ private fun SearchAllTab(
             if (showTracks) {
                 Text(
                     text = stringResource(Res.string.search_section_tracks),
-                    style = AppTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
+                    style = AppTheme.typography.headlineSmall.copy(
+                        fontSize = 24.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    ),
                     modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)
                 )
             }
@@ -789,6 +883,7 @@ private fun SearchTracksTab(
         return
     }
 
+    val isCompact = currentWindowWidthBreakpoint() isBelow WindowBreakpoints.Medium
     TrackList(
         tracks = tracks.items,
         error = tracks.error,
@@ -810,6 +905,7 @@ private fun SearchTracksTab(
         onAlbumClick = onAlbumClick,
         onArtistsOverflowClick = onArtistsOverflowClick,
         simplified = true,
+        flat = isCompact,
         modifier = modifier
     )
 }
@@ -1006,14 +1102,21 @@ private fun SearchHorizontalSection(
         ) {
             Text(
                 text = title,
-                style = AppTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
+                style = AppTheme.typography.headlineSmall.copy(
+                    fontSize = 24.sp,
+                    lineHeight = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
             )
 
             Text(
                 text = stringResource(Res.string.search_see_all),
-                style = AppTheme.typography.labelLarge,
-                color = AppTheme.colors.primary,
+                style = AppTheme.typography.labelLarge.copy(
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SpotifyTokens.Green
+                ),
                 modifier = Modifier.clickable(onClick = onSeeAll)
             )
         }
@@ -1088,79 +1191,22 @@ private fun SearchLoadingIndicator(
     message: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "search-loading")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "icon-rotation"
-    )
-    val bounce by infiniteTransition.animateFloat(
-        initialValue = -8f,
-        targetValue = 8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "icon-bounce"
-    )
-    val messageIndex by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = WarmSearchMessages.size.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = WarmSearchMessages.size * 2000,
-                easing = LinearEasing
-            ),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "message-cycle"
-    )
-    val displayMessage =
-        message ?: stringResource(WarmSearchMessages[messageIndex.toInt() % WarmSearchMessages.size])
-
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier = Modifier.size(64.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            MillenniumIcon(
-                imageVector = Iconsax.IconsaxSearchBroken,
-                contentDescription = stringResource(Res.string.search_searching),
-                tint = AppTheme.colors.primary,
-                modifier = Modifier
-                    .size(48.dp)
-                    .graphicsLayer {
-                        rotationZ = rotation
-                        translationY = bounce
-                    })
-        }
         MillenniumMarqueeProgress(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 32.dp, vertical = 16.dp)
+                .fillMaxWidth(0.45f)
+                .padding(vertical = 16.dp)
         )
-        AnimatedContent(
-            targetState = displayMessage,
-            transitionSpec = {
-                fadeIn(tween(300)) togetherWith fadeOut(tween(300))
-            },
-            label = "message-transition"
-        ) { msg ->
-            Text(
-                text = msg,
-                color = AppTheme.colors.onSurfaceVariant,
-                style = AppTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center
-            )
-        }
+        Text(
+            text = message ?: stringResource(Res.string.search_searching),
+            color = SpotifyTokens.Muted,
+            style = AppTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
     }
 }
 

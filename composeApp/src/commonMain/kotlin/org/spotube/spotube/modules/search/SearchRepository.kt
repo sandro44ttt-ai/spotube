@@ -19,6 +19,7 @@ package org.spotube.spotube.modules.search
 
 import org.spotube.plugin_interfaces.plugin_apis.metadata.album.MetadataAlbum
 import org.spotube.plugin_interfaces.plugin_apis.metadata.artist.MetadataArtist
+import org.spotube.plugin_interfaces.plugin_apis.metadata.browse.MetadataBrowseGenre
 import org.spotube.plugin_interfaces.plugin_apis.metadata.common.PaginationResult
 import org.spotube.plugin_interfaces.plugin_apis.metadata.common.PaginationStrategy
 import org.spotube.plugin_interfaces.plugin_apis.metadata.playlist.MetadataPlaylist
@@ -44,6 +45,7 @@ class SearchRepository(
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private val supportedTypesCache = Cache.Builder<Unit, List<MetadataSupportedSearchType>>().build()
+    private val genresCache = Cache.Builder<Unit, List<MetadataBrowseGenre>>().build()
     private val allSearchCache = Cache.Builder<String, List<MetadataSearchResult>>().build()
     private val trackSearchCache = Cache.Builder<Pair<String, PaginationStrategy?>, PaginationResult<MetadataSearchResult.Track>>().build()
     private val albumSearchCache = Cache.Builder<Pair<String, PaginationStrategy?>, PaginationResult<MetadataSearchResult.Album>>().build()
@@ -62,6 +64,7 @@ class SearchRepository(
 
     fun invalidateCaches() {
         supportedTypesCache.invalidateAll()
+        genresCache.invalidateAll()
         allSearchCache.invalidateAll()
         trackSearchCache.invalidateAll()
         albumSearchCache.invalidateAll()
@@ -79,13 +82,24 @@ class SearchRepository(
             }
         }
     }
+    suspend fun browseGenres(): List<MetadataBrowseGenre> {
+        return genresCache.get(Unit) {
+            val plugin = pluginManager.selectedMetadataPlugin.value
+                ?: throw IllegalStateException(getString(Res.string.search_error_no_metadata_plugin))
+            pluginManager.withScope {
+                plugin.use { metadataBrowseAPI.genres() }
+            }
+        }
+    }
 
     suspend fun searchAll(query: String): List<MetadataSearchResult> {
         return allSearchCache.get(query) {
             val plugin = pluginManager.selectedMetadataPlugin.value
                 ?: throw IllegalStateException(getString(Res.string.search_error_no_metadata_plugin))
             pluginManager.withScope {
-                plugin.use { metadataSearchAPI.search(query) }
+                plugin.use {
+                    metadataSearchAPI.search(query)
+                }
             }
         }
     }

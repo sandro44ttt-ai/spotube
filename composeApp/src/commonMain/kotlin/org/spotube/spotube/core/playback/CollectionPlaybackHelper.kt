@@ -27,6 +27,14 @@ import org.spotube.spotube.modules.blacklist.BlacklistRepository
 import org.spotube.spotube.modules.playlist.PlaylistRepository
 import org.spotube.spotube.modules.saved_tracks.SavedTracksRepository
 import org.spotube.spotube.core.remote.RemoteCollectionType
+import org.spotube.plugin_interfaces.plugin_apis.metadata.common.PaginationResult
+import org.spotube.plugin_interfaces.plugin_apis.metadata.common.PaginationStrategy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class CollectionPlaybackHelper(
     private val albumRepository: AlbumRepository,
@@ -35,16 +43,19 @@ class CollectionPlaybackHelper(
     private val artistRepository: ArtistRepository,
     private val audioPlayerQueue: AudioPlayerQueue,
     private val blacklistRepository: BlacklistRepository) {
+
+    private val appendScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val loadMutex = Mutex()
+    private var loadGeneration = 0
+
+    private suspend fun nextLoadGeneration(): Int = loadMutex.withLock { ++loadGeneration }
+
+    private suspend fun isCurrentGeneration(generation: Int): Boolean =
+        loadMutex.withLock { loadGeneration == generation }
+
     suspend fun playAlbum(albumId: String, shuffle: Boolean = false) {
         if (!shuffle && audioPlayerQueue.isAlbumPlaying(albumId)) return
-        val entries = fetchAllAlbumTracks(albumId).let { if (shuffle) it.shuffled() else it }
-        if (entries.isNotEmpty()) {
-            audioPlayerQueue.load(
-                entries = entries,
-                autoPlay = true,
-                startPosition = 0,
-                collectionEntry = QueueCollectionEntry.Album(albumId))
-        }
+        startAlbum(albumId, startTrack = null, shuffle = shuffle)
     }
 
     suspend fun addAlbumToQueue(albumId: String) {
@@ -64,9 +75,6 @@ class CollectionPlaybackHelper(
     }
 
     suspend fun playAlbumFromTrack(albumId: String, track: MetadataTrack) {
-        val entries = fetchAllAlbumTracks(albumId)
-        if (entries.isEmpty()) return
-
         val queue = audioPlayerQueue.getQueue()
         val queueIndex = queue.indexOfFirst { entry ->
             (entry as? QueueEntry.StreamingTrack)?.track?.matchesTrack(track) == true
@@ -75,28 +83,12 @@ class CollectionPlaybackHelper(
             audioPlayerQueue.jumpTo(queueIndex)
             return
         }
-
-        val startPosition = entries.indexOfFirst { entry ->
-            (entry as? QueueEntry.StreamingTrack)?.track?.matchesTrack(track) == true
-        }.coerceAtLeast(0)
-
-        audioPlayerQueue.load(
-            entries = entries,
-            autoPlay = true,
-            startPosition = startPosition,
-            collectionEntry = QueueCollectionEntry.Album(albumId))
+        startAlbum(albumId, startTrack = track, shuffle = false)
     }
 
     suspend fun playPlaylist(playlistId: String, shuffle: Boolean = false) {
         if (!shuffle && audioPlayerQueue.isPlaylistPlaying(playlistId)) return
-        val entries = fetchAllPlaylistTracks(playlistId).let { if (shuffle) it.shuffled() else it }
-        if (entries.isNotEmpty()) {
-            audioPlayerQueue.load(
-                entries = entries,
-                autoPlay = true,
-                startPosition = 0,
-                collectionEntry = QueueCollectionEntry.Playlist(playlistId))
-        }
+        startPlaylist(playlistId, startTrack = null, shuffle = shuffle)
     }
 
     suspend fun addPlaylistToQueue(playlistId: String) {
@@ -116,9 +108,6 @@ class CollectionPlaybackHelper(
     }
 
     suspend fun playPlaylistFromTrack(playlistId: String, track: MetadataTrack) {
-        val entries = fetchAllPlaylistTracks(playlistId)
-        if (entries.isEmpty()) return
-
         val queue = audioPlayerQueue.getQueue()
         val queueIndex = queue.indexOfFirst { entry ->
             (entry as? QueueEntry.StreamingTrack)?.track?.matchesTrack(track) == true
@@ -127,31 +116,16 @@ class CollectionPlaybackHelper(
             audioPlayerQueue.jumpTo(queueIndex)
             return
         }
-
-        val startPosition = entries.indexOfFirst { entry ->
-            (entry as? QueueEntry.StreamingTrack)?.track?.matchesTrack(track) == true
-        }.coerceAtLeast(0)
-
-        audioPlayerQueue.load(
-            entries = entries,
-            autoPlay = true,
-            startPosition = startPosition,
-            collectionEntry = QueueCollectionEntry.Playlist(playlistId))
+        startPlaylist(playlistId, startTrack = track, shuffle = false)
     }
 
     suspend fun playSavedTracks(shuffle: Boolean = false) {
         if (!shuffle && audioPlayerQueue.isSavedTracksPlaying()) return
-        val entries = fetchAllSavedTracks().let { if (shuffle) it.shuffled() else it }
-        if (entries.isNotEmpty()) {
-            audioPlayerQueue.load(
-                entries = entries,
-                autoPlay = true,
-                startPosition = 0,
-                collectionEntry = QueueCollectionEntry.SavedTracks)
-        }
+        startSavedTracks(startTrack = null, shuffle = shuffle)
     }
 
     suspend fun playArtistTopTracks(artistId: String) {
+        nextLoadGeneration()
         val entries = fetchArtistTopTracks(artistId)
         if (entries.isNotEmpty()) {
             audioPlayerQueue.load(
@@ -163,6 +137,7 @@ class CollectionPlaybackHelper(
     }
 
     suspend fun playArtistTopTracksFromTrack(artistId: String, track: MetadataTrack) {
+        nextLoadGeneration()
         val entries = fetchArtistTopTracks(artistId)
         if (entries.isEmpty()) return
 
@@ -200,9 +175,6 @@ class CollectionPlaybackHelper(
     }
 
     suspend fun playSavedTracksFromTrack(track: MetadataTrack) {
-        val entries = fetchAllSavedTracks()
-        if (entries.isEmpty()) return
-
         val queue = audioPlayerQueue.getQueue()
         val queueIndex = queue.indexOfFirst { entry ->
             (entry as? QueueEntry.StreamingTrack)?.track?.matchesTrack(track) == true
@@ -211,16 +183,198 @@ class CollectionPlaybackHelper(
             audioPlayerQueue.jumpTo(queueIndex)
             return
         }
+        startSavedTracks(startTrack = track, shuffle = false)
+    }
 
-        val startPosition = entries.indexOfFirst { entry ->
-            (entry as? QueueEntry.StreamingTrack)?.track?.matchesTrack(track) == true
-        }.coerceAtLeast(0)
+    private suspend fun filterTrackEntries(tracks: List<MetadataTrack>): List<QueueEntry.StreamingTrack> {
+        val blacklistedTrackIds = blacklistRepository.getTracksSnapshot().map { it.id }.toSet()
+        val blacklistedArtistIds = blacklistRepository.getArtistsSnapshot().map { it.id }.toSet()
+        return tracks
+            .filter { track -> !isTrackBlacklisted(track, blacklistedTrackIds, blacklistedArtistIds) }
+            .map { track -> QueueEntry.StreamingTrack(track = track, url = "") }
+    }
 
+    private suspend fun startAlbum(
+        albumId: String,
+        startTrack: MetadataTrack?,
+        shuffle: Boolean
+    ) {
+        val generation = nextLoadGeneration()
+        if (shuffle) {
+            val entries = fetchAllAlbumTracks(albumId).shuffled()
+            if (entries.isNotEmpty()) {
+                audioPlayerQueue.load(
+                    entries = entries,
+                    autoPlay = true,
+                    startPosition = 0,
+                    collectionEntry = QueueCollectionEntry.Album(albumId))
+            }
+            return
+        }
+
+        var page = albumRepository.getAlbumTracks(albumId) ?: return
+        val loaded = page.items.toMutableList()
+        if (startTrack != null) {
+            while (loaded.none { it.matchesTrack(startTrack) } && page.nextPagination != null) {
+                page = albumRepository.getAlbumTracks(albumId, page.nextPagination) ?: break
+                loaded += page.items
+            }
+        }
+        val entries = filterTrackEntries(loaded)
+        if (entries.isEmpty()) return
+        val startPosition = startTrack?.let { target ->
+            entries.indexOfFirst { it.track.matchesTrack(target) }
+        }?.coerceAtLeast(0) ?: 0
+        audioPlayerQueue.load(
+            entries = entries,
+            autoPlay = true,
+            startPosition = startPosition,
+            collectionEntry = QueueCollectionEntry.Album(albumId))
+        appendAlbumPages(albumId, page.nextPagination, generation)
+    }
+
+    private suspend fun startPlaylist(
+        playlistId: String,
+        startTrack: MetadataTrack?,
+        shuffle: Boolean
+    ) {
+        val generation = nextLoadGeneration()
+        if (shuffle) {
+            val entries = fetchAllPlaylistTracks(playlistId).shuffled()
+            if (entries.isNotEmpty()) {
+                audioPlayerQueue.load(
+                    entries = entries,
+                    autoPlay = true,
+                    startPosition = 0,
+                    collectionEntry = QueueCollectionEntry.Playlist(playlistId))
+            }
+            return
+        }
+
+        var page = playlistRepository.getPlaylistTracks(playlistId) ?: return
+        val loaded = page.items.toMutableList()
+        if (startTrack != null) {
+            while (loaded.none { it.matchesTrack(startTrack) } && page.nextPagination != null) {
+                page = playlistRepository.getPlaylistTracks(playlistId, page.nextPagination) ?: break
+                loaded += page.items
+            }
+        }
+        val entries = filterTrackEntries(loaded)
+        if (entries.isEmpty()) return
+        val startPosition = startTrack?.let { target ->
+            entries.indexOfFirst { it.track.matchesTrack(target) }
+        }?.coerceAtLeast(0) ?: 0
+        audioPlayerQueue.load(
+            entries = entries,
+            autoPlay = true,
+            startPosition = startPosition,
+            collectionEntry = QueueCollectionEntry.Playlist(playlistId))
+        appendPlaylistPages(playlistId, page.nextPagination, generation)
+    }
+
+    private suspend fun startSavedTracks(
+        startTrack: MetadataTrack?,
+        shuffle: Boolean
+    ) {
+        val generation = nextLoadGeneration()
+        if (shuffle) {
+            val entries = fetchAllSavedTracks().shuffled()
+            if (entries.isNotEmpty()) {
+                audioPlayerQueue.load(
+                    entries = entries,
+                    autoPlay = true,
+                    startPosition = 0,
+                    collectionEntry = QueueCollectionEntry.SavedTracks)
+            }
+            return
+        }
+
+        var page = savedTracksRepository.getSavedTracks() ?: return
+        val loaded = page.items.toMutableList()
+        if (startTrack != null) {
+            while (loaded.none { it.matchesTrack(startTrack) } && page.nextPagination != null) {
+                page = savedTracksRepository.getSavedTracks(page.nextPagination) ?: break
+                loaded += page.items
+            }
+        }
+        val entries = filterTrackEntries(loaded)
+        if (entries.isEmpty()) return
+        val startPosition = startTrack?.let { target ->
+            entries.indexOfFirst { it.track.matchesTrack(target) }
+        }?.coerceAtLeast(0) ?: 0
         audioPlayerQueue.load(
             entries = entries,
             autoPlay = true,
             startPosition = startPosition,
             collectionEntry = QueueCollectionEntry.SavedTracks)
+        appendSavedTracksPages(page.nextPagination, generation)
+    }
+
+    private fun appendAlbumPages(albumId: String, pagination: PaginationStrategy?, generation: Int) {
+        appendScope.launch {
+            var next = pagination
+            while (next != null && isCurrentGeneration(generation)) {
+                val page = runCatching {
+                    albumRepository.getAlbumTracks(albumId, next)
+                }.getOrNull() ?: break
+                if (audioPlayerQueue.getCurrentCollectionEntry() != QueueCollectionEntry.Album(albumId)) {
+                    break
+                }
+                val entries = filterTrackEntries(page.items)
+                if (entries.isNotEmpty() && isCurrentGeneration(generation)) {
+                    audioPlayerQueue.addAllToQueue(
+                        entries,
+                        collectionEntry = QueueCollectionEntry.Album(albumId))
+                }
+                next = page.nextPagination
+            }
+        }
+    }
+
+    private fun appendPlaylistPages(
+        playlistId: String,
+        pagination: PaginationStrategy?,
+        generation: Int
+    ) {
+        appendScope.launch {
+            var next = pagination
+            while (next != null && isCurrentGeneration(generation)) {
+                val page = runCatching {
+                    playlistRepository.getPlaylistTracks(playlistId, next)
+                }.getOrNull() ?: break
+                if (audioPlayerQueue.getCurrentCollectionEntry() != QueueCollectionEntry.Playlist(playlistId)) {
+                    break
+                }
+                val entries = filterTrackEntries(page.items)
+                if (entries.isNotEmpty() && isCurrentGeneration(generation)) {
+                    audioPlayerQueue.addAllToQueue(
+                        entries,
+                        collectionEntry = QueueCollectionEntry.Playlist(playlistId))
+                }
+                next = page.nextPagination
+            }
+        }
+    }
+
+    private fun appendSavedTracksPages(pagination: PaginationStrategy?, generation: Int) {
+        appendScope.launch {
+            var next = pagination
+            while (next != null && isCurrentGeneration(generation)) {
+                val page = runCatching {
+                    savedTracksRepository.getSavedTracks(next)
+                }.getOrNull() ?: break
+                if (audioPlayerQueue.getCurrentCollectionEntry() != QueueCollectionEntry.SavedTracks) {
+                    break
+                }
+                val entries = filterTrackEntries(page.items)
+                if (entries.isNotEmpty() && isCurrentGeneration(generation)) {
+                    audioPlayerQueue.addAllToQueue(
+                        entries,
+                        collectionEntry = QueueCollectionEntry.SavedTracks)
+                }
+                next = page.nextPagination
+            }
+        }
     }
 
     private suspend fun fetchAllAlbumTracks(albumId: String): List<QueueEntry> {

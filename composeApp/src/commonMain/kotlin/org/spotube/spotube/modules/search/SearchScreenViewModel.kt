@@ -23,6 +23,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import org.spotube.plugin_interfaces.plugin_apis.metadata.album.MetadataAlbum
 import org.spotube.plugin_interfaces.plugin_apis.metadata.artist.MetadataArtist
+import org.spotube.plugin_interfaces.plugin_apis.metadata.browse.MetadataBrowseGenre
 import org.spotube.plugin_interfaces.plugin_apis.metadata.common.PaginationStrategy
 import org.spotube.plugin_interfaces.plugin_apis.metadata.playlist.MetadataPlaylist
 import org.spotube.plugin_interfaces.plugin_apis.metadata.search.MetadataSearchResult
@@ -66,6 +67,8 @@ data class SearchScreenState(
     val supportedSearchTypes: List<MetadataSupportedSearchType> = emptyList(),
     val selectedSearchType: MetadataSupportedSearchType? = null,
     val isLoadingSearchTypes: Boolean = false,
+    val genres: List<MetadataBrowseGenre> = emptyList(),
+    val isLoadingGenres: Boolean = false,
     val recentSearches: List<String> = emptyList(),
     val tracks: SearchPagedState<MetadataTrack> = SearchPagedState(),
     val albums: SearchPagedState<MetadataAlbum.Basic> = SearchPagedState(),
@@ -122,7 +125,24 @@ class SearchScreenViewModel(
         }
 
         loadSupportedSearchTypes()
+        loadGenres()
         viewModelScope.launch { loadCurrentUser() }
+    }
+
+    private fun loadGenres() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoadingGenres = true)
+            runCatching { repository.browseGenres() }
+                .onSuccess { genres ->
+                    _state.value = _state.value.copy(
+                        genres = genres,
+                        isLoadingGenres = false)
+                }
+                .onFailure { e ->
+                    logger.e(e) { "Failed to load browse genres" }
+                    _state.value = _state.value.copy(isLoadingGenres = false)
+                }
+        }
     }
 
     private suspend fun loadCurrentUser() {
@@ -148,6 +168,22 @@ class SearchScreenViewModel(
         queryJob?.cancel()
         viewModelScope.launch {
             saveRecentSearch(query)
+            refreshCurrentSelection(reset = true)
+        }
+    }
+
+    fun applyGenreSearch(genre: String) {
+        _state.value = _state.value.copy(
+            query = genre,
+            selectedSearchType = MetadataSupportedSearchType.ALL,
+            tracks = SearchPagedState(),
+            albums = SearchPagedState(),
+            artists = SearchPagedState(),
+            playlists = SearchPagedState(),
+            users = SearchPagedState())
+        queryJob?.cancel()
+        viewModelScope.launch {
+            saveRecentSearch(genre)
             refreshCurrentSelection(reset = true)
         }
     }

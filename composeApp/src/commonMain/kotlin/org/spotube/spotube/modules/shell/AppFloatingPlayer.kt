@@ -70,6 +70,8 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
+import org.spotube.spotube.core.audioplayer.PlayerState
+import org.spotube.spotube.core.ui.component.spotify.SpotifyBufferingIndicator
 import org.spotube.spotube.core.ui.theming.AppTheme
 
 /**
@@ -237,12 +239,16 @@ internal fun FloatingPlayerContent(
                             .clickable(onClick = onPlayPause),
                         contentAlignment = Alignment.Center
                     ) {
-                        MillenniumIcon(
-                            imageVector = if (playerUiState.isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = Color.White
-                        )
+                        if (playerUiState.playerState == PlayerState.BUFFERING) {
+                            SpotifyBufferingIndicator(size = 20.dp)
+                        } else {
+                            MillenniumIcon(
+                                imageVector = if (playerUiState.isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
 
