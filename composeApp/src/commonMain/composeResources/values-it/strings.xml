@@ -259,6 +259,11 @@
     <string name="auto_mix_android_only">Auto Mix è disponibile solo su Android.</string>
     <string name="auto_mix_menu_subtitle">Transizioni automatiche e ordine intelligente</string>
     <string name="auto_mix_no_tracks">Questa playlist ha bisogno di almeno un brano.</string>
+    <string name="auto_mix_previous">Brano precedente</string>
+    <string name="auto_mix_next_track">Brano successivo</string>
+    <string name="auto_mix_style_cut">Taglio</string>
+    <string name="auto_mix_style_blend">Blend</string>
+    <string name="auto_mix_style_mashup">Mashup</string>
     <string name="settings_playback_port_title">Porta del server proxy di riproduzione</string>
     <string name="settings_allow_remote_control_title">Consenti controllo remoto</string>
     <string name="settings_allow_remote_control_subtitle">Consenti agli altri dispositivi sulla stessa rete di controllare la riproduzione quando si connettono.</string>

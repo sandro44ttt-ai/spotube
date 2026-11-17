@@ -43,6 +43,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import coil3.compose.AsyncImage
@@ -63,15 +65,44 @@ import org.spotube.spotube.resources.iconsax.Iconsax
 import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.auto_mix_close
 import spotube.composeapp.generated.resources.auto_mix_next
+import spotube.composeapp.generated.resources.auto_mix_next_track
 import spotube.composeapp.generated.resources.auto_mix_no_tracks
 import spotube.composeapp.generated.resources.auto_mix_pause
 import spotube.composeapp.generated.resources.auto_mix_play
+import spotube.composeapp.generated.resources.auto_mix_previous
+import spotube.composeapp.generated.resources.auto_mix_style_blend
+import spotube.composeapp.generated.resources.auto_mix_style_cut
+import spotube.composeapp.generated.resources.auto_mix_style_mashup
 import spotube.composeapp.generated.resources.auto_mix_title
 import spotube.composeapp.generated.resources.auto_mix_transitioning
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-private const val AUTO_MIX_CROSSFADE_MS = 8_000L
+private enum class TransitionStyle { Cut, Blend, Mashup }
+
+private data class TransitionPlan(
+    val style: TransitionStyle,
+    val durationMs: Long,
+    val mixOutFraction: Float,
+    val mixInFraction: Float
+)
+
+private fun planTransition(current: MetadataTrack?, next: MetadataTrack?): TransitionPlan {
+    val canMashup = (current?.durationMs ?: 0L) > 120_000L &&
+        (next?.durationMs ?: 0L) > 120_000L
+    val hash = (((current?.id ?: "") + (next?.id ?: "")).hashCode() and 0x7FFFFFFF)
+    return when {
+        !canMashup -> if (hash % 2 == 0) {
+            TransitionPlan(TransitionStyle.Cut, 1_500L, 0.80f, 0.25f)
+        } else {
+            TransitionPlan(TransitionStyle.Blend, 7_000L, 0.84f, 0.18f)
+        }
+
+        hash % 3 == 0 -> TransitionPlan(TransitionStyle.Cut, 1_500L, 0.80f, 0.25f)
+        hash % 3 == 1 -> TransitionPlan(TransitionStyle.Blend, 7_000L, 0.84f, 0.18f)
+        else -> TransitionPlan(TransitionStyle.Mashup, 14_000L, 0.68f, 0.32f)
+    }
+}
 
 @Composable
 actual fun AutoMixDialog(
@@ -114,6 +145,7 @@ actual fun AutoMixDialog(
     var isPlaying by remember { mutableStateOf(false) }
     var isTransitioning by remember { mutableStateOf(false) }
     var transitionProgress by remember { mutableFloatStateOf(0f) }
+    var transitionStyle by remember { mutableStateOf(TransitionStyle.Blend) }
     var position by remember { mutableStateOf(0L) }
     var duration by remember { mutableStateOf(0L) }
     var activeIsA by remember { mutableStateOf(true) }
@@ -177,21 +209,29 @@ actual fun AutoMixDialog(
     fun startTransition() {
         if (isTransitioning) return
         val next = nextTrack ?: return
+        val plan = planTransition(currentTrack, next)
         val from = activePlayer()
         val to = idlePlayer()
         isTransitioning = true
+        transitionStyle = plan.style
         transitionProgress = 0f
-        to.seekTo(0)
+        val targetDuration = to.duration
+        val startAt = if (targetDuration > 0L) {
+            (targetDuration * plan.mixInFraction).toLong().coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        to.seekTo(startAt)
         to.volume = 0f
         to.play()
         scope.launch {
-            val steps = (AUTO_MIX_CROSSFADE_MS / 100L).toInt()
+            val steps = (plan.durationMs / 100L).toInt().coerceAtLeast(1)
             for (step in 1..steps) {
                 val t = step.toFloat() / steps.toFloat()
                 transitionProgress = t
                 from.volume = sqrt(1f - t)
                 to.volume = sqrt(t)
-                if (step % 10 == 0) {
+                if (step % 10 == 0 || step == steps) {
                     val fromDb = -12f * t
                     val toDb = -12f * (1f - t)
                     if (activeIsA) {
@@ -225,6 +265,41 @@ actual fun AutoMixDialog(
         }
     }
 
+    fun skipNext() {
+        if (isTransitioning) return
+        val next = queue.getOrNull(index + 1)
+        if (next == null) {
+            preloadNext()
+            return
+        }
+        activePlayer().pause()
+        index += 1
+        currentTrack = next
+        position = 0
+        duration = 0
+        loadTrack(activePlayer(), next, 1f)
+        activePlayer().play()
+        isPlaying = true
+        nextTrack = queue.getOrNull(index + 1)
+        preloadNext()
+    }
+
+    fun skipPrevious() {
+        if (isTransitioning) return
+        val previousIndex = (index - 1).coerceAtLeast(0)
+        val previous = queue.getOrNull(previousIndex) ?: return
+        activePlayer().pause()
+        index = previousIndex
+        currentTrack = previous
+        position = 0
+        duration = 0
+        loadTrack(activePlayer(), previous, 1f)
+        activePlayer().play()
+        isPlaying = true
+        nextTrack = queue.getOrNull(index + 1)
+        preloadNext()
+    }
+
     LaunchedEffect(visible, tracks) {
         if (tracks.isEmpty()) return@LaunchedEffect
         mainPlayer.pause()
@@ -249,12 +324,18 @@ actual fun AutoMixDialog(
             val player = activePlayer()
             position = player.currentPosition.coerceAtLeast(0L)
             duration = player.duration.coerceAtLeast(0L)
+            val plan = planTransition(currentTrack, nextTrack)
+            val triggerAt = if (duration > 20_000L) {
+                (duration * plan.mixOutFraction).toLong()
+            } else {
+                (duration - 6_000L).coerceAtLeast(0L)
+            }
             if (
                 isPlaying &&
                 !isTransitioning &&
-                duration > AUTO_MIX_CROSSFADE_MS &&
-                position >= duration - AUTO_MIX_CROSSFADE_MS &&
-                nextTrack != null
+                nextTrack != null &&
+                duration > 0L &&
+                position >= triggerAt
             ) {
                 startTransition()
             }
@@ -272,9 +353,16 @@ actual fun AutoMixDialog(
                 attachEqualizer(audioSessionId, isA = true)
             }
         }
+        val errorListener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                if (activeIsA) skipNext()
+            }
+        }
         deckA.addAnalyticsListener(listener)
+        deckA.addListener(errorListener)
         onDispose {
             deckA.removeAnalyticsListener(listener)
+            deckA.removeListener(errorListener)
             deckA.release()
         }
     }
@@ -288,9 +376,16 @@ actual fun AutoMixDialog(
                 attachEqualizer(audioSessionId, isA = false)
             }
         }
+        val errorListener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                if (!activeIsA) skipNext()
+            }
+        }
         deckB.addAnalyticsListener(listener)
+        deckB.addListener(errorListener)
         onDispose {
             deckB.removeAnalyticsListener(listener)
+            deckB.removeListener(errorListener)
             deckB.release()
         }
     }
@@ -366,26 +461,6 @@ actual fun AutoMixDialog(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    SpotifyCircleTopBarButton(
-                        icon = if (isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
-                        contentDescription = if (isPlaying) {
-                            stringResource(Res.string.auto_mix_pause)
-                        } else {
-                            stringResource(Res.string.auto_mix_play)
-                        },
-                        onClick = {
-                            if (!isTransitioning) {
-                                if (isPlaying) {
-                                    deckA.pause()
-                                    deckB.pause()
-                                    isPlaying = false
-                                } else {
-                                    activePlayer().play()
-                                    isPlaying = true
-                                }
-                            }
-                        }
-                    )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -452,6 +527,45 @@ actual fun AutoMixDialog(
                     overflow = TextOverflow.Ellipsis
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SpotifyCircleTopBarButton(
+                        icon = Iconsax.SpotifySkipBackGlyph,
+                        contentDescription = stringResource(Res.string.auto_mix_previous),
+                        onClick = ::skipPrevious
+                    )
+                    SpotifyCircleTopBarButton(
+                        icon = if (isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
+                        contentDescription = if (isPlaying) {
+                            stringResource(Res.string.auto_mix_pause)
+                        } else {
+                            stringResource(Res.string.auto_mix_play)
+                        },
+                        onClick = {
+                            if (!isTransitioning) {
+                                if (isPlaying) {
+                                    deckA.pause()
+                                    deckB.pause()
+                                    isPlaying = false
+                                } else {
+                                    activePlayer().play()
+                                    isPlaying = true
+                                }
+                            }
+                        }
+                    )
+                    SpotifyCircleTopBarButton(
+                        icon = Iconsax.SpotifySkipNextGlyph,
+                        contentDescription = stringResource(Res.string.auto_mix_next_track),
+                        onClick = ::skipNext
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 val progress = if (isTransitioning) {
@@ -489,7 +603,11 @@ actual fun AutoMixDialog(
                     )
                     if (isTransitioning) {
                         Text(
-                            text = stringResource(Res.string.auto_mix_transitioning),
+                            text = stringResource(Res.string.auto_mix_transitioning) + " · " + when (transitionStyle) {
+                                TransitionStyle.Cut -> stringResource(Res.string.auto_mix_style_cut)
+                                TransitionStyle.Blend -> stringResource(Res.string.auto_mix_style_blend)
+                                TransitionStyle.Mashup -> stringResource(Res.string.auto_mix_style_mashup)
+                            },
                             style = AppTheme.typography.labelSmall.copy(
                                 fontSize = 11.sp,
                                 color = SpotifyTokens.Green
