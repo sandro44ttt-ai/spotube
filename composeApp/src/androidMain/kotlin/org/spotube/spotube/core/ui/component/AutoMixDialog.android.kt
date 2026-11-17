@@ -42,7 +42,9 @@ import org.spotube.spotube.core.ui.component.spotify.SpotifyCircleTopBarButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.theming.AppTheme
 import org.spotube.spotube.resources.iconsax.Iconsax
+import kotlin.math.roundToInt
 import spotube.composeapp.generated.resources.Res
+import spotube.composeapp.generated.resources.auto_mix_analyzing
 import spotube.composeapp.generated.resources.auto_mix_close
 import spotube.composeapp.generated.resources.auto_mix_next
 import spotube.composeapp.generated.resources.auto_mix_next_track
@@ -210,6 +212,28 @@ actual fun AutoMixDialog(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                val featureLine = listOfNotNull(
+                    state.currentBpm?.roundToInt()?.let { "$it BPM" },
+                    state.currentKey.takeIf { it.isNotBlank() }
+                ).joinToString(" · ")
+                if (featureLine.isNotBlank()) {
+                    Text(
+                        text = featureLine,
+                        style = AppTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = SpotifyTokens.Green
+                        )
+                    )
+                } else if (state.isAnalyzing) {
+                    Text(
+                        text = stringResource(Res.string.auto_mix_analyzing),
+                        style = AppTheme.typography.labelSmall.copy(
+                            fontSize = 11.sp,
+                            color = SpotifyTokens.Muted
+                        )
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -334,6 +358,19 @@ actual fun AutoMixDialog(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            val nextFeatureLine = listOfNotNull(
+                                state.nextBpm?.roundToInt()?.let { "$it BPM" },
+                                state.nextKey.takeIf { it.isNotBlank() }
+                            ).joinToString(" · ")
+                            if (nextFeatureLine.isNotBlank()) {
+                                Text(
+                                    text = nextFeatureLine,
+                                    style = AppTheme.typography.labelSmall.copy(
+                                        fontSize = 10.sp,
+                                        color = SpotifyTokens.Muted
+                                    )
+                                )
+                            }
                         }
                     }
                 }

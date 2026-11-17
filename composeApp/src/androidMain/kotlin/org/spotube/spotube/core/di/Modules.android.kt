@@ -24,6 +24,7 @@ import org.spotube.spotube.core.paths.Paths
 import org.spotube.spotube.core.share.AndroidShareService
 import org.spotube.spotube.core.share.ShareService
 import org.spotube.spotube.media.MediaBrowseHelper
+import org.spotube.spotube.core.automix.AudioFeatureAnalyzer
 import org.spotube.spotube.core.automix.AutoMixPlaybackManager
 import org.spotube.spotube.modules.library.local_tracks.media.AndroidLocalMediaDiscoveryService
 import org.spotube.spotube.modules.library.local_tracks.media.LocalMediaDiscoveryService
@@ -32,7 +33,8 @@ import org.koin.dsl.module
 actual val platformModules = module {
     single { Paths() }
     single<AudioPlayerInterface> { AudioPlayer(get<Context>()) }
-    single { AutoMixPlaybackManager(get(), get(), get()) }
+    single { AudioFeatureAnalyzer() }
+    single { AutoMixPlaybackManager(get(), get(), get(), get()) }
     single<LocalMediaDiscoveryService> { AndroidLocalMediaDiscoveryService(get()) }
     single<ShareService> { AndroidShareService(get()) }
     single {
