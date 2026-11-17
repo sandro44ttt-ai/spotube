@@ -110,22 +110,8 @@ import org.spotube.spotube.modules.lyrics.SyncedLyricsList
 import org.spotube.spotube.modules.saved_tracks.SAVED_TRACKS_COLLECTION_ID
 import org.spotube.spotube.modules.saved_tracks.SavedTracksViewModel
 import org.spotube.spotube.resources.iconsax.Iconsax
-import org.spotube.spotube.resources.iconsax.Iconsax3DotsMore
-import org.spotube.spotube.resources.iconsax.IconsaxArrowDown4
 import org.spotube.spotube.resources.iconsax.IconsaxArrowSquareUp
 import org.spotube.spotube.resources.iconsax.IconsaxCd
-import org.spotube.spotube.resources.iconsax.IconsaxCheckCircle
-import org.spotube.spotube.resources.iconsax.IconsaxCloseSquare
-import org.spotube.spotube.resources.iconsax.IconsaxDirectboxReceive
-import org.spotube.spotube.resources.iconsax.IconsaxNext
-import org.spotube.spotube.resources.iconsax.IconsaxPause
-import org.spotube.spotube.resources.iconsax.IconsaxPlay
-import org.spotube.spotube.resources.iconsax.IconsaxPrevious
-import org.spotube.spotube.resources.iconsax.IconsaxRefreshRight
-import org.spotube.spotube.resources.iconsax.IconsaxRepeatMusic
-import org.spotube.spotube.resources.iconsax.IconsaxRepeateMusic
-import org.spotube.spotube.resources.iconsax.IconsaxRepeateOne
-import org.spotube.spotube.resources.iconsax.IconsaxShuffle
 import org.spotube.spotube.resources.iconsax.InconsaxClock
 import org.spotube.spotube.resources.iconsax.SwapHorizontal2
 import kotlinx.coroutines.flow.map
@@ -316,162 +302,97 @@ fun AppExpandedPlayer(
                 contentSpacing = 4.dp
             ) {
                 // Grid of Options
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+                val download = currentDownload
+                val status = download?.status
+                val statusLabel = when (status) {
+                    is DownloadStatus.Completed -> stringResource(Res.string.player_download_status_downloaded)
+                    is DownloadStatus.Failed -> stringResource(Res.string.downloads_status_failed)
+                    is DownloadStatus.Cancelled -> stringResource(Res.string.downloads_status_cancelled)
+                    is DownloadStatus.Queued -> stringResource(Res.string.downloads_status_queued)
+                    is DownloadStatus.Downloading -> stringResource(Res.string.player_download_status_downloading)
+                    null -> null
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    item {
-                        OptionTile(
-                            icon = Iconsax.SwapHorizontal2,
-                            label = stringResource(Res.string.player_alternative_source),
-                            onClick = {
-                                playerOptionsViewModel.dismissMoreOptionsSheet()
-                                onAlternativeSource()
-                            })
-                    }
-                    item {
-                        val download = currentDownload
-                        val status = download?.status
-                        val statusLabel = when (status) {
-                            is DownloadStatus.Completed -> stringResource(Res.string.player_download_status_downloaded)
-                            is DownloadStatus.Failed -> stringResource(Res.string.downloads_status_failed)
-                            is DownloadStatus.Cancelled -> stringResource(Res.string.downloads_status_cancelled)
-                            is DownloadStatus.Queued -> stringResource(Res.string.downloads_status_queued)
-                            is DownloadStatus.Downloading -> stringResource(Res.string.player_download_status_downloading)
-                            null -> stringResource(Res.string.player_download)
-                        }
-                        val statusColor = when (status) {
-                            is DownloadStatus.Completed -> AppTheme.colors.primary
+                    PlayerOptionRow(
+                        icon = Iconsax.SwapHorizontal2,
+                        label = stringResource(Res.string.player_alternative_source),
+                        onClick = {
+                            playerOptionsViewModel.dismissMoreOptionsSheet()
+                            onAlternativeSource()
+                        })
+                    PlayerOptionRow(
+                        icon = if (status is DownloadStatus.Completed) Iconsax.SpotifyCheck else Iconsax.SpotifyDownload,
+                        label = stringResource(Res.string.player_download),
+                        trailing = statusLabel,
+                        tint = when (status) {
+                            is DownloadStatus.Completed -> SpotifyTokens.Green
                             is DownloadStatus.Failed -> AppTheme.colors.error
-                            else -> AppTheme.colors.onSurfaceVariant
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .aspectRatio(1f)
-                                .millenniumSurface(
-                                    background = millenniumPanelBrush(MillenniumTheme.colors),
-                                    shape = RoundedCornerShape(14.dp),
-                                    borderColor = MillenniumTheme.colors.border,
-                                    borderWidth = 1.dp,
-                                    shadowElevation = 2.dp
-                                )
-                                .clickable {
-                                    playerOptionsViewModel.dismissMoreOptionsSheet()
-                                    when (status) {
-                                        is DownloadStatus.Completed -> {
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(getString(Res.string.player_download_already_downloaded))
-                                            }
-                                        }
-
-                                        is DownloadStatus.Failed, is DownloadStatus.Cancelled -> {
-                                            download?.let { downloadsViewModel.retry(it.id) }
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(getString(Res.string.player_download_retrying))
-                                            }
-                                        }
-
-                                        is DownloadStatus.Downloading, is DownloadStatus.Queued -> {
-                                            // already in progress
-                                        }
-
-                                        null -> {
-                                            val track = currentTrack
-                                            if (track != null) {
-                                                downloadsViewModel.downloadTrack(track)
-                                                scope.launch {
-                                                    snackbarHostState.showSnackbar(
-                                                        message = getString(Res.string.player_download_started, track.title)
-                                                    )
-                                                }
-                                            }
-                                        }
+                            else -> Color.White
+                        },
+                        onClick = {
+                            playerOptionsViewModel.dismissMoreOptionsSheet()
+                            when (status) {
+                                is DownloadStatus.Completed -> {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(getString(Res.string.player_download_already_downloaded))
                                     }
-                                    onDownloadTrack()
-                                }) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                if (status is DownloadStatus.Downloading) {
-                                    DownloadProgressIcon(
-                                        track = currentTrack,
-                                        icon = Iconsax.IconsaxDirectboxReceive,
-                                        contentDescription = stringResource(Res.string.player_download),
-                                        modifier = Modifier.size(28.dp),
-                                        tint = AppTheme.colors.onSurface
-                                    )
-                                } else {
-                                    val icon = when (status) {
-                                        is DownloadStatus.Completed -> Iconsax.IconsaxCheckCircle
-                                        is DownloadStatus.Failed -> Iconsax.IconsaxCloseSquare
-                                        is DownloadStatus.Cancelled -> Iconsax.IconsaxRefreshRight
-                                        is DownloadStatus.Queued -> Iconsax.InconsaxClock
-                                        null -> Iconsax.IconsaxDirectboxReceive
-                                    }
-                                    MillenniumIcon(
-                                        imageVector = icon,
-                                        contentDescription = statusLabel,
-                                        modifier = Modifier.size(28.dp),
-                                        tint = when (status) {
-                                            is DownloadStatus.Completed -> AppTheme.colors.primary
-                                            is DownloadStatus.Failed -> AppTheme.colors.error
-                                            else -> AppTheme.colors.onSurface
-                                        }
-                                    )
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = statusLabel,
-                                    style = AppTheme.typography.labelSmall,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = statusColor
-                                )
+
+                                is DownloadStatus.Failed, is DownloadStatus.Cancelled -> {
+                                    download?.let { downloadsViewModel.retry(it.id) }
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(getString(Res.string.player_download_retrying))
+                                    }
+                                }
+
+                                is DownloadStatus.Downloading, is DownloadStatus.Queued -> {}
+
+                                null -> {
+                                    val track = currentTrack
+                                    if (track != null) {
+                                        downloadsViewModel.downloadTrack(track)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                message = getString(Res.string.player_download_started, track.title)
+                                            )
+                                        }
+                                    }
+                                }
                             }
-                        }
-                    }
-                    item {
-                        OptionTile(
-                            icon = Iconsax.InconsaxClock,
-                            label = stringResource(Res.string.player_sleep_timer),
-                            onClick = {
-                                playerOptionsViewModel.dismissMoreOptionsSheet()
-                                playerOptionsViewModel.showSleepTimerDialog()
-                                onSleepTimer()
-                            })
-                    }
-                    item {
-                        OptionTile(
-                            icon = Iconsax.IconsaxCd,
-                            label = stringResource(Res.string.player_go_to_album),
-                            onClick = {
-                                playerOptionsViewModel.dismissMoreOptionsSheet()
-                                val albumId = currentTrack?.album?.id
-                                if (albumId != null) {
-                                    navigationCommands.navigateTo(Routes.Album(albumId))
-                                    onCollapse()
-                                }
-                                onGoToAlbum()
-                            })
-                    }
-                    item {
-                        OptionTile(
-                            icon = Iconsax.Iconsax3DotsMore,
-                            label = stringResource(Res.string.player_track_details),
-                            onClick = {
-                                playerOptionsViewModel.dismissMoreOptionsSheet()
-                                playerOptionsViewModel.showTrackDetails()
-                            })
-                    }
+                            onDownloadTrack()
+                        })
+                    PlayerOptionRow(
+                        icon = Iconsax.InconsaxClock,
+                        label = stringResource(Res.string.player_sleep_timer),
+                        onClick = {
+                            playerOptionsViewModel.dismissMoreOptionsSheet()
+                            playerOptionsViewModel.showSleepTimerDialog()
+                            onSleepTimer()
+                        })
+                    PlayerOptionRow(
+                        icon = Iconsax.IconsaxCd,
+                        label = stringResource(Res.string.player_go_to_album),
+                        onClick = {
+                            playerOptionsViewModel.dismissMoreOptionsSheet()
+                            val albumId = currentTrack?.album?.id
+                            if (albumId != null) {
+                                navigationCommands.navigateTo(Routes.Album(albumId))
+                                onCollapse()
+                            }
+                            onGoToAlbum()
+                        })
+                    PlayerOptionRow(
+                        icon = Iconsax.SpotifyMoreVertical,
+                        label = stringResource(Res.string.player_track_details),
+                        onClick = {
+                            playerOptionsViewModel.dismissMoreOptionsSheet()
+                            playerOptionsViewModel.showTrackDetails()
+                        })
                 }
             }
         }
@@ -495,7 +416,7 @@ fun AppExpandedPlayer(
                     style = MillenniumIconButtonStyle.Quiet
                 ) {
                     MillenniumIcon(
-                        Iconsax.IconsaxArrowDown4,
+                        Iconsax.SpotifyChevronDown,
                         contentDescription = stringResource(Res.string.player_collapse_content_description)
                     )
                 }
@@ -510,7 +431,7 @@ fun AppExpandedPlayer(
                     onClick = playerOptionsViewModel::showMoreOptionsSheet,
                     style = MillenniumIconButtonStyle.Quiet
                 ) {
-                    MillenniumIcon(Iconsax.Iconsax3DotsMore, contentDescription = stringResource(Res.string.player_options_content_description))
+                    MillenniumIcon(Iconsax.SpotifyMoreVertical, contentDescription = stringResource(Res.string.player_options_content_description))
                 }
             }
 
@@ -638,7 +559,7 @@ fun AppExpandedPlayer(
                         style = MillenniumIconButtonStyle.Quiet
                     ) {
                         MillenniumIcon(
-                            Iconsax.IconsaxShuffle,
+                            Iconsax.SpotifyShuffleGlyph,
                             contentDescription = stringResource(if (playerUiState.isShuffling) Res.string.player_disable_shuffle_content_description else Res.string.player_enable_shuffle_content_description),
                             tint = if (playerUiState.isShuffling) {
                                 AppTheme.colors.primary
@@ -652,7 +573,7 @@ fun AppExpandedPlayer(
                         enabled = !isJamGuest,
                         style = MillenniumIconButtonStyle.Quiet
                     ) {
-                        MillenniumIcon(Iconsax.IconsaxPrevious, contentDescription = stringResource(Res.string.player_previous_content_description))
+                        MillenniumIcon(Iconsax.SpotifySkipBackGlyph, contentDescription = stringResource(Res.string.player_previous_content_description))
                     }
                     Box(
                         modifier = Modifier
@@ -674,7 +595,7 @@ fun AppExpandedPlayer(
                         enabled = !isJamGuest,
                         style = MillenniumIconButtonStyle.Quiet
                     ) {
-                        MillenniumIcon(Iconsax.IconsaxNext, contentDescription = stringResource(Res.string.player_next_content_description))
+                        MillenniumIcon(Iconsax.SpotifySkipNextGlyph, contentDescription = stringResource(Res.string.player_next_content_description))
                     }
                     MillenniumIconButton(
                         onClick = ::onLoopToggle,
@@ -683,9 +604,9 @@ fun AppExpandedPlayer(
                     ) {
                         MillenniumIcon(
                             imageVector = when (playerUiState.loopState) {
-                                LoopState.NONE -> Iconsax.IconsaxRepeateMusic
-                                LoopState.ONE -> Iconsax.IconsaxRepeateOne
-                                LoopState.ALL -> Iconsax.IconsaxRepeatMusic
+                                LoopState.NONE -> Iconsax.SpotifyRepeatOnceGlyph
+                                LoopState.ONE -> Iconsax.SpotifyRepeatOnceGlyph
+                                LoopState.ALL -> Iconsax.SpotifyRepeatGlyph
                             },
                             contentDescription = stringResource(when (playerUiState.loopState) { LoopState.NONE -> Res.string.player_loop_mode_none; LoopState.ONE -> Res.string.player_loop_mode_one; LoopState.ALL -> Res.string.player_loop_mode_all }),
                             tint = if (playerUiState.loopState == LoopState.NONE) {
@@ -810,39 +731,44 @@ private fun LyricsPreviewCard(
 }
 
 @Composable
-private fun OptionTile(
+private fun PlayerOptionRow(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    trailing: String? = null,
+    tint: Color = Color.White
 ) {
-    MillenniumCard(
+    Row(
         modifier = modifier
-            .aspectRatio(1f)
-            .clickable(onClick = onClick),
-        contentPadding = PaddingValues(12.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                MillenniumIcon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    modifier = Modifier.size(28.dp),
-                    tint = AppTheme.colors.onSurface
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = label,
-                    style = AppTheme.typography.labelSmall,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = AppTheme.colors.onSurfaceVariant
-                )
-            }
+        MillenniumIcon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = tint
+        )
+        Text(
+            text = label,
+            style = AppTheme.typography.bodyLarge.copy(fontSize = 16.sp),
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (trailing != null) {
+            Text(
+                text = trailing,
+                style = AppTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                color = SpotifyTokens.Muted,
+                maxLines = 1
+            )
         }
     }
 }

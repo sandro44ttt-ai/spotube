@@ -22,9 +22,11 @@ import androidx.lifecycle.viewModelScope
 import org.spotube.plugin_interfaces.plugin_apis.metadata.browse.MetadataBrowseGenre
 import org.spotube.plugin_interfaces.plugin_apis.metadata.browse.MetadataBrowseItem
 import org.spotube.plugin_interfaces.plugin_apis.metadata.browse.MetadataBrowseSection
+import org.spotube.plugin_interfaces.plugin_apis.metadata.album.MetadataAlbum
 import org.spotube.plugin_interfaces.plugin_apis.metadata.common.PaginationResult
 import org.spotube.plugin_interfaces.plugin_apis.metadata.common.PaginationStrategy
 import org.spotube.spotube.core.di.injectLogger
+import org.spotube.spotube.modules.library.LibraryRepository
 import org.spotube.spotube.modules.plugin.PluginManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,12 +40,18 @@ import org.koin.core.component.KoinComponent
 import org.spotube.spotube.core.i18n.getString
 import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.common_unknown_error
+import spotube.composeapp.generated.resources.home_your_albums
+import spotube.composeapp.generated.resources.home_your_playlists
 
 sealed interface HomeScreenState {
     data object Loading : HomeScreenState
 
     sealed interface Data : HomeScreenState {
         val featuredItems: List<MetadataBrowseItem>
+        val shortcuts: List<MetadataBrowseItem>
+        val personalizedSections: List<MetadataBrowseSection>
+        val userName: String?
+        val userAvatarUrl: String?
         val genres: List<MetadataBrowseGenre>
         val selectedGenreId: String?
         val browseSections: Map<String, List<MetadataBrowseSection>?>
@@ -51,12 +59,20 @@ sealed interface HomeScreenState {
 
         data class Loaded(
             override val featuredItems: List<MetadataBrowseItem>,
+            override val shortcuts: List<MetadataBrowseItem>,
+            override val personalizedSections: List<MetadataBrowseSection>,
+            override val userName: String?,
+            override val userAvatarUrl: String?,
             override val genres: List<MetadataBrowseGenre>,
             override val selectedGenreId: String?,
             override val browseSections: Map<String, List<MetadataBrowseSection>?>,
             override val paginationStrategies: Map<String, PaginationStrategy?>) : Data {
             fun toLoadingMore(): LoadingMore = LoadingMore(
                 featuredItems = featuredItems,
+                shortcuts = shortcuts,
+                personalizedSections = personalizedSections,
+                userName = userName,
+                userAvatarUrl = userAvatarUrl,
                 genres = genres,
                 selectedGenreId = selectedGenreId,
                 browseSections = browseSections,
@@ -65,6 +81,10 @@ sealed interface HomeScreenState {
 
         data class LoadingMore(
             override val featuredItems: List<MetadataBrowseItem>,
+            override val shortcuts: List<MetadataBrowseItem>,
+            override val personalizedSections: List<MetadataBrowseSection>,
+            override val userName: String?,
+            override val userAvatarUrl: String?,
             override val genres: List<MetadataBrowseGenre>,
             override val selectedGenreId: String?,
             override val browseSections: Map<String, List<MetadataBrowseSection>?>,
@@ -76,7 +96,9 @@ sealed interface HomeScreenState {
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeScreenViewModel(
-    private val repository: HomeScreenRepository, private val pluginManager: PluginManager
+    private val repository: HomeScreenRepository,
+    private val pluginManager: PluginManager,
+    private val libraryRepository: LibraryRepository
 ) : ViewModel(), KoinComponent {
     private val logger by injectLogger<HomeScreenViewModel>()
 
@@ -98,6 +120,58 @@ class HomeScreenViewModel(
         state.value = HomeScreenState.Loading
         val featuredItems = repository.featuredItems() ?: emptyList()
         val genres = repository.genres() ?: emptyList()
+        val savedPlaylists = runCatching {
+            libraryRepository.savedPlaylists()?.items.orEmpty()
+        }.getOrDefault(emptyList())
+        val savedAlbums = runCatching {
+            libraryRepository.savedAlbums()?.items.orEmpty()
+        }.getOrDefault(emptyList())
+        val user = runCatching { libraryRepository.currentUser() }.getOrNull()
+        val personalizedItems = savedPlaylists.map { MetadataBrowseItem.Playlist(it) } +
+            savedAlbums.map {
+                MetadataBrowseItem.Album(
+                    MetadataAlbum.Basic(
+                        id = it.id,
+                        title = it.title,
+                        description = it.description,
+                        thumbnails = it.thumbnails,
+                        albumType = it.albumType,
+                        artists = it.artists,
+                        externalUri = it.externalUri
+                    )
+                )
+            }
+        val shortcuts = personalizedItems.take(6).ifEmpty { featuredItems.take(6) }
+        val personalizedSections = buildList {
+            if (savedPlaylists.isNotEmpty()) {
+                add(
+                    MetadataBrowseSection(
+                        title = getString(Res.string.home_your_playlists),
+                        items = savedPlaylists.take(12).map { MetadataBrowseItem.Playlist(it) }
+                    )
+                )
+            }
+            if (savedAlbums.isNotEmpty()) {
+                add(
+                    MetadataBrowseSection(
+                        title = getString(Res.string.home_your_albums),
+                        items = savedAlbums.take(12).map {
+                            MetadataBrowseItem.Album(
+                                MetadataAlbum.Basic(
+                                    id = it.id,
+                                    title = it.title,
+                                    description = it.description,
+                                    thumbnails = it.thumbnails,
+                                    albumType = it.albumType,
+                                    artists = it.artists,
+                                    externalUri = it.externalUri
+                                )
+                            )
+                        }
+                    )
+                )
+            }
+        }
         val firstGenreId = genres.firstOrNull()?.id
         val browseSections = mutableMapOf<String, List<MetadataBrowseSection>?>()
         val paginationStrategies = mutableMapOf<String, PaginationStrategy?>()
@@ -108,6 +182,10 @@ class HomeScreenViewModel(
         }
         state.value = HomeScreenState.Data.Loaded(
             featuredItems = featuredItems,
+            shortcuts = shortcuts,
+            personalizedSections = personalizedSections,
+            userName = user?.displayName ?: user?.username,
+            userAvatarUrl = user?.thumbnails?.firstOrNull()?.url,
             genres = genres,
             selectedGenreId = firstGenreId,
             browseSections = browseSections,
@@ -131,6 +209,10 @@ class HomeScreenViewModel(
                     if (current is HomeScreenState.Data) {
                         state.value = HomeScreenState.Data.Loaded(
                             featuredItems = current.featuredItems,
+                            shortcuts = current.shortcuts,
+                            personalizedSections = current.personalizedSections,
+                            userName = current.userName,
+                            userAvatarUrl = current.userAvatarUrl,
                             genres = current.genres,
                             selectedGenreId = genreId,
                             browseSections = current.browseSections + (genreId to (result?.items ?: emptyList())),
@@ -151,6 +233,10 @@ class HomeScreenViewModel(
             val existingSections = currentState.browseSections[genreId] ?: emptyList()
             state.value = HomeScreenState.Data.Loaded(
                 featuredItems = currentState.featuredItems,
+                shortcuts = currentState.shortcuts,
+                personalizedSections = currentState.personalizedSections,
+                userName = currentState.userName,
+                userAvatarUrl = currentState.userAvatarUrl,
                 genres = currentState.genres,
                 selectedGenreId = genreId,
                 browseSections = currentState.browseSections + (genreId to (existingSections + (result?.items ?: emptyList()))),

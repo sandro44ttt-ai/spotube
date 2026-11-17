@@ -81,6 +81,7 @@ import org.spotube.spotube.core.ui.component.VerticalScrollbar
 import org.spotube.spotube.core.ui.component.cards.PlayableCard
 import org.spotube.spotube.core.ui.component.dragScrollable
 import org.spotube.spotube.core.ui.component.spotify.SpotifyChip
+import org.spotube.spotube.core.ui.component.spotify.SpotifyAvatar
 import org.spotube.spotube.core.ui.component.spotify.SpotifyGreetingHeader
 import org.spotube.spotube.core.ui.component.spotify.SpotifySectionHeader
 import org.spotube.spotube.core.ui.component.spotify.SpotifyShortcutTile
@@ -172,6 +173,14 @@ fun HomeScreen(viewModel: HomeScreenViewModel) {
             else -> Res.string.spotify_greeting_evening
         }
         SpotifyGreetingHeader(greeting = stringResource(greetingRes)) {
+            val homeData = state as? HomeScreenState.Data
+            if (homeData != null) {
+                SpotifyAvatar(
+                    imageURL = homeData.userAvatarUrl,
+                    name = homeData.userName,
+                    onClick = { navigationCommands.navigateTo(Routes.Library) }
+                )
+            }
             SpotifyTopBarIcon(
                 icon = Iconsax.IconsaxSetting2,
                 contentDescription = stringResource(Res.string.settings_screen_title),
@@ -286,7 +295,7 @@ private fun HomeContent(
             }
 
             is HomeScreenState.Data -> {
-                val shortcuts = state.featuredItems.take(6)
+                val shortcuts = state.shortcuts.take(6)
                 if (shortcuts.isNotEmpty()) {
                     item {
                         SpotifyShortcutGrid(items = shortcuts)
@@ -302,6 +311,15 @@ private fun HomeContent(
                         )
                     }
                 }
+
+                items(state.personalizedSections) { section ->
+                    HomeSection(
+                        title = section.title,
+                        subtitle = section.description,
+                        items = section.items
+                    )
+                }
+
                 val currentSections = state.selectedGenreId?.let { state.browseSections[it] }
 
                 if (currentSections == null) {

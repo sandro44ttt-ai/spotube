@@ -728,6 +728,42 @@ fun SpotifyCircleTopBarButton(
     }
 }
 
+/** Spotify profile avatar shown at the top right of the home screen. */
+@Composable
+fun SpotifyAvatar(
+    imageURL: String?,
+    name: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(SpotifyTokens.Highlight)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!imageURL.isNullOrBlank()) {
+            AsyncImage(
+                model = imageURL,
+                contentDescription = name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Text(
+                text = name?.trim()?.take(1)?.uppercase().orEmpty().ifBlank { "?" },
+                style = AppTheme.typography.labelLarge.copy(
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                ),
+                maxLines = 1
+            )
+        }
+    }
+}
+
 /** Spotify 2026 seek bar: 4dp white track, white thumb, 12sp timestamps. */
 @Composable
 fun SpotifySeekBar(
@@ -844,7 +880,7 @@ fun SpotifyCircleAddButton(
         contentAlignment = Alignment.Center
     ) {
         MillenniumIcon(
-            imageVector = Iconsax.SpotifyPlus,
+            imageVector = Iconsax.SpotifyPlusGlyph,
             contentDescription = contentDescription,
             modifier = Modifier.size(16.dp),
             tint = Color.White

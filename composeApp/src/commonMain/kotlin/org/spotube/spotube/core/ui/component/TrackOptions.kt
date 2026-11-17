@@ -34,6 +34,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.theming.AppTheme
 import com.composeunstyled.Text
 import androidx.compose.runtime.Composable
@@ -119,7 +124,7 @@ fun TrackOptions(
                 onClick = onClick,
                 style = MillenniumIconButtonStyle.Quiet) {
                 MillenniumIcon(
-                    imageVector = Iconsax.Iconsax3DotsMore,
+                    imageVector = Iconsax.SpotifyMoreVertical,
                     contentDescription = stringResource(Res.string.track_options_title),
                     modifier = Modifier.shimmerApply()
                 )
@@ -183,20 +188,20 @@ fun TrackOptionsBottomSheet(
                             MillenniumIcon(
                                 imageVector = icon,
                                 contentDescription = null,
-                                modifier = Modifier.size(22.dp),
+                                modifier = Modifier.size(24.dp),
                                 tint = if (item.enabled) {
-                                    AppTheme.colors.onSurface
+                                    Color.White
                                 } else {
-                                    AppTheme.colors.onSurface.copy(alpha = 0.38f)
+                                    Color.White.copy(alpha = 0.38f)
                                 })
-                        } ?: Spacer(modifier = Modifier.size(22.dp))
+                        } ?: Spacer(modifier = Modifier.size(24.dp))
                         Text(
                             text = item.label,
-                            style = AppTheme.typography.bodyLarge,
+                            style = AppTheme.typography.bodyLarge.copy(fontSize = 16.sp),
                             color = if (item.enabled) {
-                                AppTheme.colors.onSurface
+                                Color.White
                             } else {
-                                AppTheme.colors.onSurface.copy(alpha = 0.38f)
+                                Color.White.copy(alpha = 0.38f)
                             })
                     }
                 }
@@ -218,29 +223,24 @@ fun TrackOptionsSheetHeader(track: MetadataTrack) {
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(56.dp)
-                .clip(AppTheme.shapes.small))
+                .size(48.dp)
+                .clip(RoundedCornerShape(4.dp)))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = track.title,
-                style = AppTheme.typography.titleMedium,
+                style = AppTheme.typography.titleSmall.copy(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold),
+                color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis)
             Text(
                 text = track.artists.joinToString(", ") { it.name },
-                style = AppTheme.typography.bodyMedium,
-                color = AppTheme.colors.onSurfaceVariant,
+                style = AppTheme.typography.bodySmall.copy(fontSize = 14.sp),
+                color = SpotifyTokens.Muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
-            track.album?.let { album ->
-                Text(
-                    text = album.title,
-                    style = AppTheme.typography.bodySmall,
-                    color = AppTheme.colors.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
-            }
         }
     }
 }
@@ -273,13 +273,13 @@ private fun buildTrackMenuItems(
         if (!state.isInQueue && !state.isCurrentlyPlaying) {
             add(
                 AdaptiveMenuItem(
-                    icon = Iconsax.IconsaxNext,
+                    icon = Iconsax.SpotifySkipNextGlyph,
                     label = stringResource(Res.string.track_options_play_next),
                     onClick = { onAction(TrackOptionsAction.PlayNext) }))
         } else if (state.isInQueue && !state.isCurrentlyPlaying) {
             add(
                 AdaptiveMenuItem(
-                    icon = Iconsax.IconsaxNext,
+                    icon = Iconsax.SpotifySkipNextGlyph,
                     label = stringResource(Res.string.track_options_move_to_next),
                     onClick = { onAction(TrackOptionsAction.PlayNext) }))
         }
@@ -287,7 +287,7 @@ private fun buildTrackMenuItems(
         if (!state.isInQueue) {
             add(
                 AdaptiveMenuItem(
-                    icon = Iconsax.IconsaxAddSquare,
+                    icon = Iconsax.SpotifyQueueGlyph,
                     label = stringResource(Res.string.player_add_to_queue_content_description),
                     onClick = { onAction(TrackOptionsAction.AddToQueue) }))
         } else {
@@ -301,19 +301,19 @@ private fun buildTrackMenuItems(
 
     add(
         AdaptiveMenuItem(
-            icon = if (state.isFavorite) Iconsax.IconsaxHeart2 else Iconsax.IconsaxHeart,
+            icon = if (state.isFavorite) Iconsax.SpotifyHeartFilled else Iconsax.SpotifyHeartOutline,
             label = if (state.isFavorite) stringResource(Res.string.track_options_remove_from_favorites) else stringResource(Res.string.track_options_save_as_favorite),
             onClick = { onAction(TrackOptionsAction.ToggleFavorite) }))
 
     add(
         AdaptiveMenuItem(
-            icon = Iconsax.IconsaxMusicPlaylist,
+            icon = Iconsax.SpotifyPlusGlyph,
             label = stringResource(Res.string.track_options_add_to_playlist),
             onClick = { onAction(TrackOptionsAction.AddToPlaylist) }))
 
     add(
         AdaptiveMenuItem(
-            icon = Iconsax.IconsaxDirectboxReceive,
+            icon = Iconsax.SpotifyDownload,
             label = stringResource(Res.string.track_options_download),
             onClick = { onAction(TrackOptionsAction.Download) }))
 
@@ -326,7 +326,7 @@ private fun buildTrackMenuItems(
     if (!track.externalUri.isNullOrBlank()) {
         add(
             AdaptiveMenuItem(
-                icon = Iconsax.IconsaxShare,
+                icon = Iconsax.SpotifyShareGlyph,
                 label = stringResource(Res.string.track_options_share),
                 onClick = { onAction(TrackOptionsAction.Share) }))
     }

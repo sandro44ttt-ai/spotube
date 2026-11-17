@@ -447,4 +447,236 @@ object Iconsax {
 
     @Suppress("ObjectPropertyName")
     private var _SpotifyDownload: ImageVector? = null
+
+    /** Exact Spotify shuffle glyph (`encore_icon_shuffle_24`). */
+    val SpotifyShuffleGlyph: ImageVector
+        get() {
+            if (_SpotifyShuffleGlyph != null) return _SpotifyShuffleGlyph!!
+            _SpotifyShuffleGlyph = ImageVector.Builder(
+                name = "SpotifyShuffleGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M18.788,3.702a1,1 0,0 1,1.414 -1.414L23.914,6l-3.712,3.712a1,1 0,1 1,-1.414 -1.414L20.086,7h-1.518a5,5 0,0 0,-3.826 1.78l-7.346,8.73a7,7 0,0 1,-5.356 2.494H1v-2h1.04a5,5 0,0 0,3.826 -1.781l7.345,-8.73A7,7 0,0 1,18.569 5h1.518l-1.298,-1.298z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+                addPath(
+                    pathData = addPathNodes(
+                        "M18.788,14.289a1,1 0,0 0,0 1.414L20.086,17h-1.518a5,5 0,0 1,-3.826 -1.78l-1.403,-1.668 -1.306,1.554 1.178,1.4A7,7 0,0 0,18.568 19h1.518l-1.298,1.298a1,1 0,1 0,1.414 1.414L23.914,18l-3.712,-3.713a1,1 0,0 0,-1.414 0zM7.396,6.49l2.023,2.404 -1.307,1.553 -2.246,-2.67a5,5 0,0 0,-3.826 -1.78H1v-2h1.04A7,7 0,0 1,7.396 6.49"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyShuffleGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyShuffleGlyph: ImageVector? = null
+
+    /** Exact Spotify repeat glyph (`encore_icon_repeat_24`). */
+    val SpotifyRepeatGlyph: ImageVector
+        get() {
+            if (_SpotifyRepeatGlyph != null) return _SpotifyRepeatGlyph!!
+            _SpotifyRepeatGlyph = ImageVector.Builder(
+                name = "SpotifyRepeatGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M6,2a5,5 0,0 0,-5 5v8a5,5 0,0 0,5 5h1v-2H6a3,3 0,0 1,-3 -3V7a3,3 0,0 1,3 -3h12a3,3 0,0 1,3 3v8a3,3 0,0 1,-3 3h-4.798l1.298,-1.298a1,1 0,1 0,-1.414 -1.414L9.373,19l3.713,3.712a1,1 0,0 0,1.414 -1.414L13.202,20H18a5,5 0,0 0,5 -5V7a5,5 0,0 0,-5 -5z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyRepeatGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyRepeatGlyph: ImageVector? = null
+
+    /** Exact Spotify repeat-once glyph (`encore_icon_repeat_once_24`). */
+    val SpotifyRepeatOnceGlyph: ImageVector
+        get() {
+            if (_SpotifyRepeatOnceGlyph != null) return _SpotifyRepeatOnceGlyph!!
+            _SpotifyRepeatOnceGlyph = ImageVector.Builder(
+                name = "SpotifyRepeatOnceGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M1,7a5,5 0,0 1,5 -5h1v2L6,4a3,3 0,0 0,-3 3v8a3,3 0,0 0,3 3h1v2L6,20a5,5 0,0 1,-5 -5zM18,4h-1L17,2h1a5,5 0,0 1,5 5v8a5,5 0,0 1,-5 5h-7.202v-2L18,18a3,3 0,0 0,3 -3L21,7a3,3 0,0 0,-3 -3"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+                addPath(
+                    pathData = addPathNodes(
+                        "M14.5,15.288a1,1 0,0 1,0 1.414L12.202,19l2.298,2.298a1,1 0,0 1,-1.414 1.415L9.373,19l3.713,-3.712a1,1 0,0 1,1.414 0M11.967,3.202l1.008,0.91H9.559v-1.4q1.316,-0.098 1.918,-0.49c0.602,-0.392 0.649,-0.649 0.742,-1.162h1.75V11h-2.002z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+                addPath(
+                    pathData = addPathNodes("m12.975,4.112 l-1.008,-0.91v0.91z"),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyRepeatOnceGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyRepeatOnceGlyph: ImageVector? = null
+
+    /** Exact Spotify skip-back glyph (`encore_icon_skip_back_24`). */
+    val SpotifySkipBackGlyph: ImageVector
+        get() {
+            if (_SpotifySkipBackGlyph != null) return _SpotifySkipBackGlyph!!
+            _SpotifySkipBackGlyph = ImageVector.Builder(
+                name = "SpotifySkipBackGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M6.3,3a0.7,0.7 0,0 1,0.7 0.7v6.805l11.95,-6.899a0.7,0.7 0,0 1,1.05 0.606v15.576a0.7,0.7 0,0 1,-1.05 0.606L7,13.495V20.3a0.7,0.7 0,0 1,-0.7 0.7H4.7a0.7,0.7 0,0 1,-0.7 -0.7V3.7a0.7,0.7 0,0 1,0.7 -0.7z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifySkipBackGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifySkipBackGlyph: ImageVector? = null
+
+    /** Exact Spotify skip-next glyph (`encore_icon_skip_next_24`). */
+    val SpotifySkipNextGlyph: ImageVector
+        get() {
+            if (_SpotifySkipNextGlyph != null) return _SpotifySkipNextGlyph!!
+            _SpotifySkipNextGlyph = ImageVector.Builder(
+                name = "SpotifySkipNextGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M10.658,4.02c0.116,0 0.23,0.03 0.33,0.088l12.683,7.323a0.66,0.66 0,0 1,0.241 0.898,0.66 0.66 0,0 1,-0.241 0.241l-12.684,7.324a0.658,0.658 0,0 1,-0.987 -0.57v-4.635L0.987,19.895a0.66,0.66 0,0 1,-0.987 -0.57V4.677a0.66,0.66 0,0 1,0.987 -0.57L10,9.311V4.678a0.66,0.66 0,0 1,0.33 -0.57,0.66 0.66,0 0,1 0.328,-0.087"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifySkipNextGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifySkipNextGlyph: ImageVector? = null
+
+    /** Exact Spotify heart outline (`encore_icon_heart_24`). */
+    val SpotifyHeartOutline: ImageVector
+        get() {
+            if (_SpotifyHeartOutline != null) return _SpotifyHeartOutline!!
+            _SpotifyHeartOutline = ImageVector.Builder(
+                name = "SpotifyHeartOutline",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M5.21,1.57a6.76,6.76 0,0 1,6.708 1.545,0.124 0.124 0,0 0,0.165 0 6.74,6.74 0,0 1,5.715 -1.78l0.004,0.001a6.8,6.8 0,0 1,5.571 5.376v0.003a6.69,6.69 0,0 1,-1.49 5.655l-7.954,9.48a2.518,2.518 0,0 1,-3.857 0L2.12,12.37A6.68,6.68 0,0 1,0.627 6.714,6.76 6.76,0 0,1 5.21,1.57m3.12,1.803a4.757,4.757 0,0 0,-5.74 3.725l-0.001,0.002a4.68,4.68 0,0 0,1.049 3.969l0.009,0.01 7.958,9.485a0.518,0.518 0,0 0,0.79 0l7.968,-9.495a4.69,4.69 0,0 0,1.049 -3.965,4.8 4.8 0,0 0,-3.931 -3.794 4.74,4.74 0,0 0,-4.023 1.256l-0.008,0.008a2.123,2.123 0,0 1,-2.9 0l-0.007,-0.007a4.76,4.76 0,0 0,-2.214 -1.194z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyHeartOutline!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyHeartOutline: ImageVector? = null
+
+    /** Exact Spotify filled heart (`encore_icon_heart_active_24`). */
+    val SpotifyHeartFilled: ImageVector
+        get() {
+            if (_SpotifyHeartFilled != null) return _SpotifyHeartFilled!!
+            _SpotifyHeartFilled = ImageVector.Builder(
+                name = "SpotifyHeartFilled",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M8.667,1.912a6.257,6.257 0,0 0,-7.462 7.677c0.24,0.906 0.683,1.747 1.295,2.457l7.955,9.482a2.015,2.015 0,0 0,3.09 0l7.956,-9.482a6.19,6.19 0,0 0,1.382 -5.234l-0.49,0.097 0.49,-0.099a6.3,6.3 0,0 0,-5.162 -4.98h-0.002a6.24,6.24 0,0 0,-5.295 1.65,0.623 0.623 0,0 1,-0.848 0 6.26,6.26 0,0 0,-2.91 -1.568z"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyHeartFilled!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyHeartFilled: ImageVector? = null
+
+    /** Exact Spotify chevron-down glyph (`encore_icon_chevron_down_24`). */
+    val SpotifyChevronDown: ImageVector
+        get() {
+            if (_SpotifyChevronDown != null) return _SpotifyChevronDown!!
+            _SpotifyChevronDown = ImageVector.Builder(
+                name = "SpotifyChevronDown",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M2.793,8.043a1,1 0,0 1,1.414 0L12,15.836l7.793,-7.793a1,1 0,1 1,1.414 1.414L12,18.664 2.793,9.457a1,1 0,0 1,0 -1.414"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyChevronDown!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyChevronDown: ImageVector? = null
+
+    /** Exact Spotify plus glyph (`encore_icon_plus_24`). */
+    val SpotifyPlusGlyph: ImageVector
+        get() {
+            if (_SpotifyPlusGlyph != null) return _SpotifyPlusGlyph!!
+            _SpotifyPlusGlyph = ImageVector.Builder(
+                name = "SpotifyPlusGlyph",
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = addPathNodes(
+                        "M12,1a1,1 0,0 1,1 1v9h9a1,1 0,1 1,0 2h-9v9a1,1 0,1 1,-2 0v-9H2a1,1 0,1 1,0 -2h9V2a1,1 0,0 1,1 -1"
+                    ),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+            return _SpotifyPlusGlyph!!
+        }
+
+    @Suppress("ObjectPropertyName")
+    private var _SpotifyPlusGlyph: ImageVector? = null
 }

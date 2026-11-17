@@ -167,7 +167,7 @@ fun CollectionDetails(
                         modifier = modifier
                     )
                     SpotifyOutlineCircleIconButton(
-                        icon = Iconsax.SpotifyShuffle,
+                        icon = Iconsax.SpotifyShuffleGlyph,
                         contentDescription = stringResource(Res.string.collection_details_shuffle_play),
                         onClick = onShufflePlay
                     )
@@ -458,7 +458,7 @@ fun CollectionDetails(
                                         .clickable(onClick = onFollowClick),
                                     contentAlignment = Alignment.Center) {
                                     MillenniumIcon(
-                                        imageVector = if (isFollowing) Iconsax.SpotifyCheck else Iconsax.SpotifyPlus,
+                                        imageVector = if (isFollowing) Iconsax.SpotifyCheck else Iconsax.SpotifyPlusGlyph,
                                         contentDescription = stringResource(
                                             if (isFollowing) {
                                                 Res.string.collection_details_unfollow
@@ -508,7 +508,7 @@ fun CollectionDetails(
                                     .clickable(onClick = onShufflePlay),
                                 contentAlignment = Alignment.Center) {
                                 MillenniumIcon(
-                                    imageVector = Iconsax.SpotifyShuffle,
+                                    imageVector = Iconsax.SpotifyShuffleGlyph,
                                     contentDescription = stringResource(Res.string.collection_details_shuffle_play),
                                     modifier = Modifier.size(24.dp),
                                     tint = SpotifyTokens.Green)

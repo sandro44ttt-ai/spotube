@@ -20,6 +20,8 @@
     <string name="spotify_greeting_afternoon">Good afternoon</string>
     <string name="spotify_greeting_evening">Good evening</string>
     <string name="spotify_filter_all">All</string>
+    <string name="home_your_playlists">Your playlists</string>
+    <string name="home_your_albums">Your albums</string>
     <string name="queue_title">Queue</string>
     <string name="queue_clear_queue">Clear Queue</string>
     <string name="queue_filter_queue">Filter queue...</string>

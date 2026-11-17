@@ -309,7 +309,7 @@ fun CollectionView(
                         }) {
                         MillenniumDropdownMenuItem(
                             label = stringResource(Res.string.player_add_to_queue_content_description),
-                            icon = Iconsax.IconsaxAddSquare,
+                            icon = Iconsax.SpotifyQueueGlyph,
                             onClick = {
                                 showCollectionMenu = false
                                 onAddToQueue()

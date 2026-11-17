@@ -43,8 +43,6 @@ import org.spotube.spotube.modules.saved_tracks.SavedState
 import org.spotube.spotube.modules.saved_tracks.SavedTracksViewModel
 import org.spotube.spotube.modules.saved_tracks.rememberIsSavedTracks
 import org.spotube.spotube.resources.iconsax.Iconsax
-import org.spotube.spotube.resources.iconsax.IconsaxHeart
-import org.spotube.spotube.resources.iconsax.IconsaxHeart2
 import org.jetbrains.compose.resources.stringResource
 import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.player_like_content_description
@@ -97,7 +95,7 @@ fun PlayerHeartButton(
                     ),
                 contentAlignment = Alignment.Center) {
                 MillenniumIcon(
-                    imageVector = if (isLiked) Iconsax.SpotifyCheck else Iconsax.SpotifyPlus,
+                    imageVector = if (isLiked) Iconsax.SpotifyCheck else Iconsax.SpotifyPlusGlyph,
                     contentDescription = stringResource(
                         if (isLiked) {
                             Res.string.player_unlike_content_description
@@ -109,7 +107,7 @@ fun PlayerHeartButton(
             }
         } else {
             MillenniumIcon(
-                imageVector = if (isLiked) Iconsax.IconsaxHeart2 else Iconsax.IconsaxHeart,
+                imageVector = if (isLiked) Iconsax.SpotifyHeartFilled else Iconsax.SpotifyHeartOutline,
                 contentDescription = stringResource(if (isLiked) Res.string.player_unlike_content_description else Res.string.player_like_content_description),
                 tint = if (isLiked) AppTheme.colors.primary else AppTheme.colors.onSurfaceVariant)
         }
