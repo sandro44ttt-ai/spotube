@@ -250,6 +250,15 @@
     <string name="mix_lab_state_ended">finito</string>
     <string name="mix_lab_state_unknown">?</string>
     <string name="mix_lab_android_only">Mix Lab è disponibile solo su Android.</string>
+    <string name="auto_mix_title">Auto Mix</string>
+    <string name="auto_mix_close">Chiudi</string>
+    <string name="auto_mix_pause">Pausa</string>
+    <string name="auto_mix_play">Riproduci</string>
+    <string name="auto_mix_next">Prossimo</string>
+    <string name="auto_mix_transitioning">Mixando...</string>
+    <string name="auto_mix_android_only">Auto Mix è disponibile solo su Android.</string>
+    <string name="auto_mix_menu_subtitle">Transizioni automatiche e ordine intelligente</string>
+    <string name="auto_mix_no_tracks">Questa playlist ha bisogno di almeno un brano.</string>
     <string name="settings_playback_port_title">Porta del server proxy di riproduzione</string>
     <string name="settings_allow_remote_control_title">Consenti controllo remoto</string>
     <string name="settings_allow_remote_control_subtitle">Consenti agli altri dispositivi sulla stessa rete di controllare la riproduzione quando si connettono.</string>

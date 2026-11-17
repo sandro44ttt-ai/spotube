@@ -45,6 +45,7 @@ import org.spotube.spotube.core.jam.JamRole
 import org.spotube.spotube.core.jam.JamRoomService
 import org.koin.compose.koinInject
 import org.spotube.spotube.core.navigation.Routes
+import org.spotube.spotube.core.ui.component.AutoMixDialog
 import org.spotube.spotube.core.ui.component.CollectionView
 import org.spotube.spotube.modules.library.playlist.AddToPlaylistPicker
 import org.spotube.spotube.modules.library.playlist.PlaylistFormData
@@ -80,6 +81,7 @@ fun PlaylistScreen(
     val showAddToPlaylistPicker by viewModel.showAddToPlaylistPicker.collectAsStateWithLifecycle()
     val editPlaylistFormState by viewModel.editPlaylistFormState.collectAsStateWithLifecycle()
     var showAddTracksDialog by remember { mutableStateOf(false) }
+    var showAutoMix by remember { mutableStateOf(false) }
 
     val dataState = state as? PlaylistScreenState.Data
     val playlist = dataState?.playlist
@@ -143,6 +145,7 @@ fun PlaylistScreen(
         trackCount = playlist?.trackCount ?: dataState?.tracks?.size ?: 0,
         totalDurationMs = dataState?.tracks?.sumOf { it.durationMs } ?: 0L,
         shareUrl = playlist?.externalUri,
+        onAutoMix = { showAutoMix = true },
         hasMore = dataState?.nextPagination != null,
         isLoadingNextPage = state is PlaylistScreenState.Data.LoadingMore,
         currentTrackId = trackOptionsContext.currentTrackId,
@@ -194,4 +197,10 @@ fun PlaylistScreen(
                     viewModel.refresh()
                 })
         })
+
+    AutoMixDialog(
+        visible = showAutoMix,
+        title = playlist?.title.orEmpty(),
+        tracks = dataState?.tracks.orEmpty(),
+        onDismiss = { showAutoMix = false })
 }

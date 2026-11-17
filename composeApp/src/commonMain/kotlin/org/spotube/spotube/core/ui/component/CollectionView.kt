@@ -120,6 +120,7 @@ fun CollectionView(
     trackCount: Int = 0,
     totalDurationMs: Long = 0L,
     shareUrl: String? = null,
+    onAutoMix: (() -> Unit)? = null,
     footerContent: (@Composable () -> Unit)? = null,
     trailingContent: @Composable () -> Unit = {}) {
     val listState = rememberLazyListState()
@@ -200,6 +201,7 @@ fun CollectionView(
             } else {
                 null
             },
+            onAutoMix = if (!skeleton) onAutoMix else null,
             sharedElementKey = sharedElementKey,
             isJamGuest = isJamGuest,
             onAddToJam = { onAddToJam(tracks) })
@@ -314,6 +316,15 @@ fun CollectionView(
                                 showCollectionMenu = false
                                 onAddToQueue()
                             })
+                        if (onAutoMix != null) {
+                            MillenniumDropdownMenuItem(
+                                label = stringResource(Res.string.auto_mix_title),
+                                icon = Iconsax.SpotifyPlay,
+                                onClick = {
+                                    showCollectionMenu = false
+                                    onAutoMix()
+                                })
+                        }
                         if (shareUrl != null) {
                             MillenniumDropdownMenuItem(
                                 label = stringResource(Res.string.track_options_share),

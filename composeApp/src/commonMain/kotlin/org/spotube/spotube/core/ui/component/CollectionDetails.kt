@@ -66,6 +66,7 @@ import org.spotube.spotube.core.ui.media.rememberDominantColor
 import org.spotube.spotube.core.ui.misc.TextWithShimmer
 import org.spotube.spotube.core.ui.misc.shimmerApply
 import org.spotube.spotube.core.ui.component.spotify.SpotifyOutlineCircleIconButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyOutlinePillButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyPlayPillButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.component.spotify.spotifyCollectionHeaderBrush
@@ -112,6 +113,7 @@ fun CollectionDetails(
     statsText: String? = null,
     onDownload: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
+    onAutoMix: (() -> Unit)? = null,
     sharedElementKey: String? = null) {
     val isCompact = currentWindowWidthBreakpoint() isBelow WindowBreakpoints.Medium
     val headerPainter = rememberAsyncImagePainter(model = imageURL)
@@ -413,6 +415,13 @@ fun CollectionDetails(
                                 color = SpotifyTokens.Muted,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis)
+                        }
+                        if (onAutoMix != null) {
+                            SpotifyOutlinePillButton(
+                                text = stringResource(Res.string.auto_mix_title),
+                                icon = Iconsax.SpotifyPlay,
+                                onClick = onAutoMix,
+                                modifier = Modifier.fillMaxWidth())
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
