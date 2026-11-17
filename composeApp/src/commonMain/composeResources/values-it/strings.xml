@@ -227,6 +227,7 @@
     <string name="settings_mix_lab_title">Mix Lab (sperimentale)</string>
     <string name="settings_mix_lab_subtitle">Prova il mixer a due deck</string>
     <string name="mix_lab_title">Mix Lab</string>
+    <string name="mix_lab_hint">Usa il crossfader per mixare deck A e deck B.</string>
     <string name="mix_lab_deck_a">Deck A</string>
     <string name="mix_lab_deck_b">Deck B</string>
     <string name="mix_lab_crossfader">Crossfader</string>
@@ -238,6 +239,16 @@
     <string name="mix_lab_close">Chiudi</string>
     <string name="mix_lab_no_tracks">Avvia prima una coda con almeno 2 brani.</string>
     <string name="mix_lab_drift">Deriva: %1$d ms</string>
+    <string name="mix_lab_align_b">Riallinea B su A</string>
+    <string name="mix_lab_preparing">Preparazione...</string>
+    <string name="mix_lab_eq_active">EQ attivo</string>
+    <string name="mix_lab_eq_unavailable">EQ non disponibile</string>
+    <string name="mix_lab_state">Stato: A %1$s · B %2$s</string>
+    <string name="mix_lab_state_idle">inattivo</string>
+    <string name="mix_lab_state_buffering">buffer</string>
+    <string name="mix_lab_state_ready">pronto</string>
+    <string name="mix_lab_state_ended">finito</string>
+    <string name="mix_lab_state_unknown">?</string>
     <string name="mix_lab_android_only">Mix Lab è disponibile solo su Android.</string>
     <string name="settings_playback_port_title">Porta del server proxy di riproduzione</string>
     <string name="settings_allow_remote_control_title">Consenti controllo remoto</string>

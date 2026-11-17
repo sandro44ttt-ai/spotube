@@ -1,10 +1,7 @@
 package org.spotube.spotube.core.ui.component
 
-import android.content.Context
-import android.media.AudioManager
 import android.media.audiofx.Equalizer
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,32 +39,49 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import com.composeunstyled.Text
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
-import org.spotube.millennium.composables.MillenniumButton
-import org.spotube.millennium.composables.MillenniumButtonStyle
-import org.spotube.millennium.composables.MillenniumSlider
 import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
+import org.spotube.spotube.core.ui.component.spotify.SpotifyCircleTopBarButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyOutlinePillButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifyPrimaryButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifySecondaryButton
+import org.spotube.spotube.core.ui.component.spotify.SpotifySeekBar
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.theming.AppTheme
+import org.spotube.spotube.resources.iconsax.Iconsax
 import spotube.composeapp.generated.resources.Res
-import spotube.composeapp.generated.resources.mix_lab_android_only
+import spotube.composeapp.generated.resources.mix_lab_align_b
 import spotube.composeapp.generated.resources.mix_lab_bass
 import spotube.composeapp.generated.resources.mix_lab_close
 import spotube.composeapp.generated.resources.mix_lab_crossfader
 import spotube.composeapp.generated.resources.mix_lab_deck_a
 import spotube.composeapp.generated.resources.mix_lab_deck_b
 import spotube.composeapp.generated.resources.mix_lab_drift
+import spotube.composeapp.generated.resources.mix_lab_eq_active
+import spotube.composeapp.generated.resources.mix_lab_eq_unavailable
+import spotube.composeapp.generated.resources.mix_lab_hint
 import spotube.composeapp.generated.resources.mix_lab_no_tracks
 import spotube.composeapp.generated.resources.mix_lab_pause
 import spotube.composeapp.generated.resources.mix_lab_play
+import spotube.composeapp.generated.resources.mix_lab_preparing
 import spotube.composeapp.generated.resources.mix_lab_speed
 import spotube.composeapp.generated.resources.mix_lab_start_synced
+import spotube.composeapp.generated.resources.mix_lab_state
+import spotube.composeapp.generated.resources.mix_lab_state_buffering
+import spotube.composeapp.generated.resources.mix_lab_state_ended
+import spotube.composeapp.generated.resources.mix_lab_state_idle
+import spotube.composeapp.generated.resources.mix_lab_state_ready
+import spotube.composeapp.generated.resources.mix_lab_state_unknown
 import spotube.composeapp.generated.resources.mix_lab_title
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 @Composable
@@ -89,11 +104,6 @@ actual fun MixLabDialog(
     val itemB = playlist.getOrNull(currentIndex + 1)
         ?: playlist.firstOrNull { it.url != itemA?.url }
 
-    val audioManager = remember {
-        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    }
-    val sessionA = remember { audioManager.generateAudioSessionId() }
-    val sessionB = remember { audioManager.generateAudioSessionId() }
     val audioAttributes = remember {
         AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -104,16 +114,15 @@ actual fun MixLabDialog(
         ExoPlayer.Builder(context)
             .setAudioAttributes(audioAttributes, false)
             .build()
-            .also { runCatching { it.setAudioSessionId(sessionA) } }
     }
     val deckB = remember {
         ExoPlayer.Builder(context)
             .setAudioAttributes(audioAttributes, false)
             .build()
-            .also { runCatching { it.setAudioSessionId(sessionB) } }
     }
 
     var isPlaying by remember { mutableStateOf(false) }
+    var isSyncing by remember { mutableStateOf(false) }
     var crossfade by remember { mutableFloatStateOf(0.5f) }
     var speedA by remember { mutableFloatStateOf(1f) }
     var speedB by remember { mutableFloatStateOf(1f) }
@@ -123,8 +132,39 @@ actual fun MixLabDialog(
     var positionB by remember { mutableStateOf(0L) }
     var durationA by remember { mutableStateOf(0L) }
     var durationB by remember { mutableStateOf(0L) }
+    var stateA by remember { mutableStateOf(Player.STATE_IDLE) }
+    var stateB by remember { mutableStateOf(Player.STATE_IDLE) }
+    var sessionIdA by remember { mutableStateOf(0) }
+    var sessionIdB by remember { mutableStateOf(0) }
     var eqA by remember { mutableStateOf<Equalizer?>(null) }
     var eqB by remember { mutableStateOf<Equalizer?>(null) }
+    var eqStatusA by remember { mutableStateOf("") }
+    var eqStatusB by remember { mutableStateOf("") }
+
+    fun attachEqualizer(sessionId: Int, deckIsA: Boolean) {
+        if (sessionId == 0) return
+        if (deckIsA && eqA != null) return
+        if (!deckIsA && eqB != null) return
+        val equalizer = runCatching {
+            Equalizer(0, sessionId).apply { enabled = true }
+        }.getOrNull()
+        if (deckIsA) {
+            eqA = equalizer
+            eqStatusA = if (equalizer != null) "ok" else "failed"
+        } else {
+            eqB = equalizer
+            eqStatusB = if (equalizer != null) "ok" else "failed"
+        }
+    }
+
+    fun applyBass(equalizer: Equalizer?, value: Float) {
+        if (equalizer == null) return
+        runCatching {
+            val range = equalizer.bandLevelRange
+            val level = (value * 100f).toInt().coerceIn(range[0].toInt(), range[1].toInt())
+            equalizer.setBandLevel(bassBand(equalizer), level.toShort())
+        }
+    }
 
     LaunchedEffect(Unit) { mainPlayer.pause() }
 
@@ -150,47 +190,54 @@ actual fun MixLabDialog(
     LaunchedEffect(speedB) {
         deckB.playbackParameters = PlaybackParameters(speedB)
     }
-    LaunchedEffect(isPlaying) {
-        if (isPlaying) {
-            if (eqA == null) {
-                eqA = runCatching {
-                    Equalizer(0, sessionA).apply { enabled = true }
-                }.getOrNull()
-            }
-            if (eqB == null) {
-                eqB = runCatching {
-                    Equalizer(0, sessionB).apply { enabled = true }
-                }.getOrNull()
-            }
-        }
-    }
-    LaunchedEffect(eqA, bassA) {
-        runCatching { eqA?.setBandLevel(0.toShort(), (bassA * 100f).toInt().toShort()) }
-    }
-    LaunchedEffect(eqB, bassB) {
-        runCatching { eqB?.setBandLevel(0.toShort(), (bassB * 100f).toInt().toShort()) }
-    }
-    LaunchedEffect(visible) {
-        while (visible) {
-            positionA = deckA.currentPosition
-            positionB = deckB.currentPosition
-            durationA = deckA.duration.coerceAtLeast(0L)
-            durationB = deckB.duration.coerceAtLeast(0L)
-            delay(200)
-        }
-    }
+    LaunchedEffect(eqA, bassA) { applyBass(eqA, bassA) }
+    LaunchedEffect(eqB, bassB) { applyBass(eqB, bassB) }
 
     DisposableEffect(deckA) {
-        onDispose { deckA.release() }
+        val listener = object : AnalyticsListener {
+            override fun onAudioSessionIdChanged(eventTime: AnalyticsListener.EventTime, audioSessionId: Int) {
+                sessionIdA = audioSessionId
+                attachEqualizer(audioSessionId, deckIsA = true)
+            }
+        }
+        deckA.addAnalyticsListener(listener)
+        onDispose {
+            deckA.removeAnalyticsListener(listener)
+            deckA.release()
+        }
     }
     DisposableEffect(deckB) {
-        onDispose { deckB.release() }
+        val listener = object : AnalyticsListener {
+            override fun onAudioSessionIdChanged(eventTime: AnalyticsListener.EventTime, audioSessionId: Int) {
+                sessionIdB = audioSessionId
+                attachEqualizer(audioSessionId, deckIsA = false)
+            }
+        }
+        deckB.addAnalyticsListener(listener)
+        onDispose {
+            deckB.removeAnalyticsListener(listener)
+            deckB.release()
+        }
     }
     DisposableEffect(eqA) {
         onDispose { runCatching { eqA?.release() } }
     }
     DisposableEffect(eqB) {
         onDispose { runCatching { eqB?.release() } }
+    }
+
+    LaunchedEffect(visible) {
+        while (visible) {
+            positionA = deckA.currentPosition
+            positionB = deckB.currentPosition
+            durationA = deckA.duration.coerceAtLeast(0L)
+            durationB = deckB.duration.coerceAtLeast(0L)
+            stateA = deckA.playbackState
+            stateB = deckB.playbackState
+            if (eqA == null && sessionIdA != 0) attachEqualizer(sessionIdA, deckIsA = true)
+            if (eqB == null && sessionIdB != 0) attachEqualizer(sessionIdB, deckIsA = false)
+            delay(200)
+        }
     }
 
     fun playBoth() {
@@ -205,6 +252,39 @@ actual fun MixLabDialog(
         isPlaying = false
     }
 
+    fun startSynced() {
+        scope.launch {
+            isSyncing = true
+            deckA.pause()
+            deckB.pause()
+            deckA.seekTo(0)
+            deckB.seekTo(0)
+            val bothReady = withTimeoutOrNull(8_000) {
+                while (
+                    deckA.playbackState != Player.STATE_READY ||
+                    deckB.playbackState != Player.STATE_READY
+                ) {
+                    delay(25)
+                }
+                true
+            } != null
+            if (bothReady) {
+                deckA.playWhenReady = true
+                deckB.playWhenReady = true
+                isPlaying = true
+            }
+            isSyncing = false
+        }
+    }
+
+    fun alignBToA() {
+        deckB.seekTo(deckA.currentPosition)
+        if (deckA.isPlaying) {
+            deckB.play()
+        }
+        isPlaying = deckA.isPlaying || deckB.isPlaying
+    }
+
     Dialog(
         onDismissRequest = {
             pauseBoth()
@@ -217,125 +297,226 @@ actual fun MixLabDialog(
                 .fillMaxSize()
                 .background(SpotifyTokens.Base)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(16.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = stringResource(Res.string.mix_lab_title),
-                        style = AppTheme.typography.headlineSmall.copy(
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = androidx.compose.ui.graphics.Color.White
-                        )
+                    SpotifyCircleTopBarButton(
+                        icon = Iconsax.SpotifyChevronDown,
+                        contentDescription = stringResource(Res.string.mix_lab_close),
+                        onClick = {
+                            pauseBoth()
+                            onDismiss()
+                        }
                     )
-                    Text(
-                        text = stringResource(Res.string.mix_lab_close),
-                        style = AppTheme.typography.labelLarge.copy(
-                            color = SpotifyTokens.Muted
-                        ),
+                    Column(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SpotifyTokens.Surface)
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                            .clickable {
-                                pauseBoth()
-                                onDismiss()
-                            }
+                            .weight(1f)
+                            .padding(start = 12.dp)
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.mix_lab_title),
+                            style = AppTheme.typography.headlineSmall.copy(
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        )
+                        Text(
+                            text = stringResource(Res.string.mix_lab_hint),
+                            style = AppTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                color = SpotifyTokens.Muted
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    SpotifyCircleTopBarButton(
+                        icon = if (isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
+                        contentDescription = if (isPlaying) {
+                            stringResource(Res.string.mix_lab_pause)
+                        } else {
+                            stringResource(Res.string.mix_lab_play)
+                        },
+                        onClick = {
+                            if (isPlaying) pauseBoth() else playBoth()
+                        }
                     )
                 }
 
                 if (itemA == null || itemB == null) {
-                    Text(
-                        text = stringResource(Res.string.mix_lab_no_tracks),
-                        style = AppTheme.typography.bodyMedium,
-                        color = SpotifyTokens.Muted
-                    )
-                } else {
-                    MixDeckPanel(
-                        label = stringResource(Res.string.mix_lab_deck_a),
-                        title = itemA.title,
-                        artist = itemA.artist,
-                        positionMs = positionA,
-                        durationMs = durationA,
-                        speed = speedA,
-                        bass = bassA,
-                        onSpeedChange = { speedA = it },
-                        onBassChange = { bassA = it }
-                    )
-                    MixDeckPanel(
-                        label = stringResource(Res.string.mix_lab_deck_b),
-                        title = itemB.title,
-                        artist = itemB.artist,
-                        positionMs = positionB,
-                        durationMs = durationB,
-                        speed = speedB,
-                        bass = bassB,
-                        onSpeedChange = { speedB = it },
-                        onBassChange = { bassB = it }
-                    )
-
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = stringResource(Res.string.mix_lab_crossfader),
-                            style = AppTheme.typography.labelLarge,
+                            text = stringResource(Res.string.mix_lab_no_tracks),
+                            style = AppTheme.typography.bodyMedium,
                             color = SpotifyTokens.Muted
                         )
-                        MillenniumSlider(
-                            value = crossfade,
-                            onValueChange = { crossfade = it },
-                            label = stringResource(Res.string.mix_lab_crossfader),
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        MixDeckCard(
+                            label = stringResource(Res.string.mix_lab_deck_a),
+                            title = itemA.title,
+                            artist = itemA.artist,
+                            positionMs = positionA,
+                            durationMs = durationA,
+                            speed = speedA,
+                            onSpeedChange = { speedA = it },
+                            bass = bassA,
+                            onBassChange = { bassA = it },
+                            eqAvailable = eqA != null,
+                            eqStatus = eqStatusA
+                        )
+                        MixDeckCard(
+                            label = stringResource(Res.string.mix_lab_deck_b),
+                            title = itemB.title,
+                            artist = itemB.artist,
+                            positionMs = positionB,
+                            durationMs = durationB,
+                            speed = speedB,
+                            onSpeedChange = { speedB = it },
+                            bass = bassB,
+                            onBassChange = { bassB = it },
+                            eqAvailable = eqB != null,
+                            eqStatus = eqStatusB
+                        )
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(SpotifyTokens.Surface)
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = stringResource(Res.string.mix_lab_crossfader),
+                                    style = AppTheme.typography.labelSmall.copy(
+                                        fontSize = 11.sp,
+                                        color = SpotifyTokens.Muted
+                                    )
+                                )
+                                Text(
+                                    text = "${"%.2f".format(crossfade)}",
+                                    style = AppTheme.typography.labelSmall.copy(
+                                        fontSize = 11.sp,
+                                        color = SpotifyTokens.Muted
+                                    )
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "A",
+                                    style = AppTheme.typography.labelLarge.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                                Box(modifier = Modifier.weight(1f)) {
+                                    SpotifySeekBar(
+                                        value = crossfade,
+                                        onValueChange = { crossfade = it },
+                                        onValueChangeFinished = {},
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                                Text(
+                                    text = "B",
+                                    style = AppTheme.typography.labelLarge.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(SpotifyTokens.Surface)
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    Res.string.mix_lab_state,
+                                    stateLabel(stateA),
+                                    stateLabel(stateB)
+                                ),
+                                style = AppTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    color = SpotifyTokens.Muted
+                                )
+                            )
+                            Text(
+                                text = if (isSyncing) {
+                                    stringResource(Res.string.mix_lab_preparing)
+                                } else if (stateA == Player.STATE_READY && stateB == Player.STATE_READY) {
+                                    stringResource(
+                                        Res.string.mix_lab_drift,
+                                        (positionA - positionB).toInt()
+                                    )
+                                } else {
+                                    stringResource(Res.string.mix_lab_preparing)
+                                },
+                                style = AppTheme.typography.bodySmall.copy(
+                                    fontSize = 12.sp,
+                                    color = if (stateA == Player.STATE_READY && stateB == Player.STATE_READY) {
+                                        Color.White
+                                    } else {
+                                        SpotifyTokens.Muted
+                                    }
+                                )
+                            )
+                        }
+
+                        SpotifyPrimaryButton(
+                            text = stringResource(Res.string.mix_lab_play),
+                            onClick = ::playBoth,
                             modifier = Modifier.fillMaxWidth()
                         )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        MillenniumButton(
-                            onClick = ::playBoth,
-                            modifier = Modifier.weight(1f)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(stringResource(Res.string.mix_lab_play))
-                        }
-                        MillenniumButton(
-                            onClick = ::pauseBoth,
-                            style = MillenniumButtonStyle.Secondary,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(stringResource(Res.string.mix_lab_pause))
+                            SpotifyOutlinePillButton(
+                                text = stringResource(Res.string.mix_lab_start_synced),
+                                icon = Iconsax.SpotifyRepeatGlyph,
+                                onClick = ::startSynced,
+                                modifier = Modifier.weight(1f)
+                            )
+                            SpotifySecondaryButton(
+                                text = stringResource(Res.string.mix_lab_align_b),
+                                onClick = ::alignBToA,
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
-                    MillenniumButton(
-                        onClick = {
-                            deckA.seekTo(0)
-                            deckB.seekTo(0)
-                            playBoth()
-                        },
-                        style = MillenniumButtonStyle.Secondary,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(Res.string.mix_lab_start_synced))
-                    }
-
-                    Text(
-                        text = stringResource(
-                            Res.string.mix_lab_drift,
-                            (positionA - positionB).toInt()
-                        ),
-                        style = AppTheme.typography.bodySmall,
-                        color = SpotifyTokens.Muted
-                    )
                 }
             }
         }
@@ -343,76 +524,150 @@ actual fun MixLabDialog(
 }
 
 @Composable
-private fun MixDeckPanel(
+private fun MixDeckCard(
     label: String,
     title: String,
     artist: String,
     positionMs: Long,
     durationMs: Long,
     speed: Float,
-    bass: Float,
     onSpeedChange: (Float) -> Unit,
-    onBassChange: (Float) -> Unit
+    bass: Float,
+    onBassChange: (Float) -> Unit,
+    eqAvailable: Boolean,
+    eqStatus: String
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(SpotifyTokens.Surface)
-            .padding(12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(
-            text = label,
-            style = AppTheme.typography.labelSmall.copy(
-                color = SpotifyTokens.Muted,
-                fontSize = 11.sp
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = label.uppercase(),
+                style = AppTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    color = SpotifyTokens.Muted
+                )
             )
-        )
+            Text(
+                text = if (eqAvailable) {
+                    stringResource(Res.string.mix_lab_eq_active)
+                } else if (eqStatus == "failed") {
+                    stringResource(Res.string.mix_lab_eq_unavailable)
+                } else {
+                    ""
+                },
+                style = AppTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    color = if (eqAvailable) SpotifyTokens.Green else SpotifyTokens.Muted
+                )
+            )
+        }
         Text(
             text = title,
             style = AppTheme.typography.titleSmall.copy(
-                color = androidx.compose.ui.graphics.Color.White,
-                fontWeight = FontWeight.SemiBold
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White
             ),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         Text(
             text = artist,
-            style = AppTheme.typography.bodySmall,
+            style = AppTheme.typography.bodySmall.copy(fontSize = 12.sp),
             color = SpotifyTokens.Muted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         Text(
             text = "${formatMs(positionMs)} / ${formatMs(durationMs)}",
-            style = AppTheme.typography.labelSmall,
-            color = SpotifyTokens.Muted
+            style = AppTheme.typography.labelSmall.copy(
+                fontSize = 11.sp,
+                color = SpotifyTokens.Muted
+            )
         )
-        Text(
-            text = "${stringResource(Res.string.mix_lab_speed)} ${"%.2f".format(speed)}x",
-            style = AppTheme.typography.labelSmall,
-            color = SpotifyTokens.Muted
-        )
-        MillenniumSlider(
-            value = (speed - 0.9f) / 0.2f,
-            onValueChange = { onSpeedChange(0.9f + it.coerceIn(0f, 1f) * 0.2f) },
+        SpotifyLabSlider(
             label = stringResource(Res.string.mix_lab_speed),
-            modifier = Modifier.fillMaxWidth()
+            valueLabel = "${"%.2f".format(speed)}x",
+            value = ((speed - 0.9f) / 0.2f).coerceIn(0f, 1f),
+            onValueChange = { onSpeedChange(0.9f + it.coerceIn(0f, 1f) * 0.2f) }
         )
-        Text(
-            text = "${stringResource(Res.string.mix_lab_bass)} ${bass.toInt()} dB",
-            style = AppTheme.typography.labelSmall,
-            color = SpotifyTokens.Muted
-        )
-        MillenniumSlider(
-            value = (bass + 12f) / 24f,
-            onValueChange = { onBassChange((it.coerceIn(0f, 1f) * 24f) - 12f) },
+        SpotifyLabSlider(
             label = stringResource(Res.string.mix_lab_bass),
+            valueLabel = "${bass.toInt()} dB",
+            value = ((bass + 12f) / 24f).coerceIn(0f, 1f),
+            onValueChange = { onBassChange((it.coerceIn(0f, 1f) * 24f) - 12f) }
+        )
+    }
+}
+
+@Composable
+private fun SpotifyLabSlider(
+    label: String,
+    valueLabel: String,
+    value: Float,
+    onValueChange: (Float) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = label,
+                style = AppTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    color = SpotifyTokens.Muted
+                )
+            )
+            Text(
+                text = valueLabel,
+                style = AppTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    color = SpotifyTokens.Muted
+                )
+            )
+        }
+        SpotifySeekBar(
+            value = value,
+            onValueChange = onValueChange,
+            onValueChangeFinished = {},
             modifier = Modifier.fillMaxWidth()
         )
     }
+}
+
+@Composable
+private fun stateLabel(state: Int): String = when (state) {
+    Player.STATE_IDLE -> stringResource(Res.string.mix_lab_state_idle)
+    Player.STATE_BUFFERING -> stringResource(Res.string.mix_lab_state_buffering)
+    Player.STATE_READY -> stringResource(Res.string.mix_lab_state_ready)
+    Player.STATE_ENDED -> stringResource(Res.string.mix_lab_state_ended)
+    else -> stringResource(Res.string.mix_lab_state_unknown)
+}
+
+private fun bassBand(equalizer: Equalizer): Short {
+    var bestBand: Short = 0
+    var bestDistance = Float.MAX_VALUE
+    for (index in 0 until equalizer.numberOfBands.toInt()) {
+        val band = index.toShort()
+        val range = runCatching { equalizer.getBandFreqRange(band) }.getOrNull() ?: continue
+        val centerHz = ((range[0].toLong() + range[1].toLong()) / 2L) / 1000f
+        val distance = abs(centerHz - 90f)
+        if (distance < bestDistance) {
+            bestDistance = distance
+            bestBand = band
+        }
+    }
+    return bestBand
 }
 
 private fun formatMs(value: Long): String {
