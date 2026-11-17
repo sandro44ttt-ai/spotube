@@ -30,6 +30,7 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 class AutoMixPlaybackManager(
     private val context: Context,
@@ -99,6 +100,8 @@ class AutoMixPlaybackManager(
     private var analysisJob: Job? = null
     private val features = mutableMapOf<String, AudioFeatures>()
     private var activeSpeed: Float = 1f
+    private var lastStartTrackId: String? = null
+    private val localAnalysisEnabled = false
 
     init {
         deckA.addAnalyticsListener(object : AnalyticsListener {
@@ -152,7 +155,10 @@ class AutoMixPlaybackManager(
         queue.clear()
         features.clear()
         activeSpeed = 1f
-        queue.addAll(smartOrder(tracks))
+        val ordered = smartOrder(tracks)
+        val startIndex = chooseStartIndex(ordered)
+        queue.addAll(ordered.drop(startIndex) + ordered.take(startIndex))
+        lastStartTrackId = queue.firstOrNull()?.id
         index = 0
         activeIsA = true
         isStarted = true
@@ -453,6 +459,15 @@ class AutoMixPlaybackManager(
         )
     }
 
+    private fun chooseStartIndex(tracks: List<MetadataTrack>): Int {
+        if (tracks.size <= 1) return 0
+        var candidate = Random.nextInt(tracks.size)
+        if (tracks[candidate].id == lastStartTrackId) {
+            candidate = (candidate + 1 + Random.nextInt(tracks.size - 1)) % tracks.size
+        }
+        return candidate
+    }
+
     private fun smartOrder(tracks: List<MetadataTrack>): List<MetadataTrack> {
         if (tracks.size <= 2) return tracks
         val remaining = tracks.toMutableList()
@@ -541,7 +556,7 @@ class AutoMixPlaybackManager(
             )
         }
 
-        if (bothLong && hash % 10 < 3) {
+        if (bothLong && hash % 10 < 6) {
             return TransitionPlan(
                 style = TransitionStyle.Mashup,
                 durationMs = 16_000L + variation * 2_000L,
@@ -643,6 +658,7 @@ class AutoMixPlaybackManager(
     }
 
     private fun ensureAnalysis() {
+        if (!localAnalysisEnabled) return
         if (!isStarted || analysisJob?.isActive == true) return
         analysisJob = scope.launch {
             try {
