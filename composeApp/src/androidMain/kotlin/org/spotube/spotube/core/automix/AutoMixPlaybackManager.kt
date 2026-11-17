@@ -3,7 +3,7 @@ package org.spotube.spotube.core.automix
 import android.content.Context
 import android.media.AudioFocusRequest
 import android.media.AudioManager
-import android.media.audiofx.Equalizer
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
@@ -56,7 +56,10 @@ class AutoMixPlaybackManager(
         val currentKey: String = "",
         val nextBpm: Float? = null,
         val nextKey: String = "",
-        val isAnalyzing: Boolean = false
+        val isAnalyzing: Boolean = false,
+        val playbackState: Int = Player.STATE_IDLE,
+        val lastError: String = "",
+        val debugInfo: String = ""
     )
 
     private val _state = MutableStateFlow(State())
@@ -76,8 +79,6 @@ class AutoMixPlaybackManager(
         .setAudioAttributes(audioAttributes, false)
         .build()
 
-    private var eqA: Equalizer? = null
-    private var eqB: Equalizer? = null
     private var sessionA: Int = 0
     private var sessionB: Int = 0
     private var focusRequest: AudioFocusRequest? = null
@@ -103,6 +104,7 @@ class AutoMixPlaybackManager(
     private var activeSpeed: Float = 1f
     private var lastStartTrackId: String? = null
     private val localAnalysisEnabled = false
+    private var lastError: String = ""
 
     init {
         deckA.addAnalyticsListener(object : AnalyticsListener {
@@ -111,7 +113,6 @@ class AutoMixPlaybackManager(
                 audioSessionId: Int
             ) {
                 sessionA = audioSessionId
-                attachEqualizer(audioSessionId, isA = true)
             }
         })
         deckB.addAnalyticsListener(object : AnalyticsListener {
@@ -120,17 +121,24 @@ class AutoMixPlaybackManager(
                 audioSessionId: Int
             ) {
                 sessionB = audioSessionId
-                attachEqualizer(audioSessionId, isA = false)
             }
         })
         deckA.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                if (activeIsA) skipNext()
+                Log.e("AutoMix", "deckA error: ${error.errorCode} ${error.message}", error)
+                if (activeIsA) {
+                    lastError = "A${error.errorCode}: ${error.message.orEmpty()}"
+                    skipNext()
+                }
             }
         })
         deckB.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                if (!activeIsA) skipNext()
+                Log.e("AutoMix", "deckB error: ${error.errorCode} ${error.message}", error)
+                if (!activeIsA) {
+                    lastError = "B${error.errorCode}: ${error.message.orEmpty()}"
+                    skipNext()
+                }
             }
         })
     }
@@ -153,6 +161,7 @@ class AutoMixPlaybackManager(
         }
         title = requestedTitle
         sessionKey = key
+        lastError = ""
         queue.clear()
         features.clear()
         activeSpeed = 1f
@@ -229,6 +238,7 @@ class AutoMixPlaybackManager(
         activePlayer().pause()
         activePlayer().playbackParameters = PlaybackParameters(1f)
         activeSpeed = 1f
+        lastError = ""
         index += 1
         current = target
         positionMs = 0L
@@ -249,6 +259,7 @@ class AutoMixPlaybackManager(
         activePlayer().pause()
         activePlayer().playbackParameters = PlaybackParameters(1f)
         activeSpeed = 1f
+        lastError = ""
         index = previousIndex
         current = target
         positionMs = 0L
@@ -269,6 +280,15 @@ class AutoMixPlaybackManager(
                 val player = activePlayer()
                 positionMs = player.currentPosition.coerceAtLeast(0L)
                 durationMs = player.duration.coerceAtLeast(0L)
+                if (!isTransitioning && isPlaying) {
+                    if (player.volume < 0.99f) player.volume = 1f
+                    if (
+                        player.playbackState == Player.STATE_READY &&
+                        !player.isPlaying
+                    ) {
+                        player.play()
+                    }
+                }
                 val plan = planTransition(current, next)
                 val triggerAt = transitionTriggerAt(plan, durationMs)
                 if (
@@ -308,30 +328,12 @@ class AutoMixPlaybackManager(
                 transitionProgress = t
                 from.volume = sqrt(1f - t)
                 to.volume = sqrt(t)
-                if (step % 10 == 0 || step == steps) {
-                    val fromDb = -12f * t
-                    val toDb = -12f * (1f - t)
-                    if (activeIsA) {
-                        applyBass(eqA, fromDb)
-                        applyBass(eqB, toDb)
-                    } else {
-                        applyBass(eqB, fromDb)
-                        applyBass(eqA, toDb)
-                    }
-                }
                 publish()
                 delay(100)
             }
             from.pause()
             from.volume = 1f
             to.volume = 1f
-            if (activeIsA) {
-                applyBass(eqA, 0f)
-                applyBass(eqB, 0f)
-            } else {
-                applyBass(eqB, 0f)
-                applyBass(eqA, 0f)
-            }
             activeIsA = !activeIsA
             activeSpeed = plan.speed
             index += 1
@@ -423,28 +425,11 @@ class AutoMixPlaybackManager(
         focusRequest = null
     }
 
-    private fun attachEqualizer(sessionId: Int, isA: Boolean) {
-        if (sessionId == 0) return
-        if (isA && eqA != null) return
-        if (!isA && eqB != null) return
-        val equalizer = runCatching {
-            Equalizer(0, sessionId).apply { enabled = true }
-        }.getOrNull()
-        if (isA) eqA = equalizer else eqB = equalizer
-    }
-
-    private fun applyBass(equalizer: Equalizer?, db: Float) {
-        if (equalizer == null) return
-        runCatching {
-            val range = equalizer.bandLevelRange
-            val level = (db * 100f).toInt().coerceIn(range[0].toInt(), range[1].toInt())
-            equalizer.setBandLevel(bassBand(equalizer), level.toShort())
-        }
-    }
-
     private fun publish() {
         val currentFeatures = current?.let { features[it.id] }
         val nextFeatures = next?.let { features[it.id] }
+        val player = activePlayer()
+        val session = if (activeIsA) sessionA else sessionB
         _state.value = State(
             isActive = isStarted,
             title = title,
@@ -460,7 +445,14 @@ class AutoMixPlaybackManager(
             currentKey = currentFeatures?.key.orEmpty(),
             nextBpm = nextFeatures?.bpm,
             nextKey = nextFeatures?.key.orEmpty(),
-            isAnalyzing = analysisJob?.isActive == true
+            isAnalyzing = analysisJob?.isActive == true,
+            playbackState = player.playbackState,
+            lastError = lastError,
+            debugInfo = "state=${player.playbackState} playing=${player.isPlaying} " +
+                "vol=${(player.volume * 100).roundToInt()}% session=$session " +
+                "buffered=${player.bufferedPosition} " +
+                "media=${audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)}/" +
+                "${audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}"
         )
     }
 
@@ -701,24 +693,6 @@ class AutoMixPlaybackManager(
                 publish()
             }
         }
-    }
-
-    private fun bassBand(equalizer: Equalizer): Short {
-        var bestBand: Short = 0
-        var bestDistance = Float.MAX_VALUE
-        for (bandIndex in 0 until equalizer.numberOfBands.toInt()) {
-            val band = bandIndex.toShort()
-            val range = runCatching {
-                equalizer.getBandFreqRange(band)
-            }.getOrNull() ?: continue
-            val centerHz = ((range[0].toLong() + range[1].toLong()) / 2L) / 1000f
-            val distance = abs(centerHz - 90f)
-            if (distance < bestDistance) {
-                bestDistance = distance
-                bestBand = band
-            }
-        }
-        return bestBand
     }
 }
 

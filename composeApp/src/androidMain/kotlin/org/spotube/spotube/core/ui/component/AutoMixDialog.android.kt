@@ -234,6 +234,28 @@ actual fun AutoMixDialog(
                         )
                     )
                 }
+                if (state.lastError.isNotBlank()) {
+                    Text(
+                        text = state.lastError,
+                        style = AppTheme.typography.labelSmall.copy(
+                            fontSize = 9.sp,
+                            color = Color(0xFFFF6B6B)
+                        ),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (state.debugInfo.isNotBlank()) {
+                    Text(
+                        text = state.debugInfo,
+                        style = AppTheme.typography.labelSmall.copy(
+                            fontSize = 8.sp,
+                            color = SpotifyTokens.Muted.copy(alpha = 0.7f)
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
