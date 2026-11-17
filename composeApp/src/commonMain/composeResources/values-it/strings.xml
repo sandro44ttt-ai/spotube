@@ -264,6 +264,7 @@
     <string name="auto_mix_style_cut">Taglio</string>
     <string name="auto_mix_style_blend">Blend</string>
     <string name="auto_mix_style_mashup">Mashup</string>
+    <string name="auto_mix_notification_text">Mixaggio automatico in corso</string>
     <string name="settings_playback_port_title">Porta del server proxy di riproduzione</string>
     <string name="settings_allow_remote_control_title">Consenti controllo remoto</string>
     <string name="settings_allow_remote_control_subtitle">Consenti agli altri dispositivi sulla stessa rete di controllare la riproduzione quando si connettono.</string>

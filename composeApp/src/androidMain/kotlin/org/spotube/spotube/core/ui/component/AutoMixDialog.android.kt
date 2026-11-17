@@ -1,5 +1,8 @@
 package org.spotube.spotube.core.ui.component
 
+import android.content.Context
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.audiofx.Equalizer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +62,7 @@ import org.spotube.spotube.core.audioplayer.AudioPlayerInterface
 import org.spotube.spotube.core.ui.component.spotify.SpotifyCircleTopBarButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.theming.AppTheme
+import org.spotube.spotube.media.AutoMixForegroundService
 import org.spotube.spotube.modules.plugin.PluginProvider
 import org.spotube.spotube.modules.settings.SettingsProvider
 import org.spotube.spotube.resources.iconsax.Iconsax
@@ -120,6 +124,9 @@ actual fun AutoMixDialog(
     val settings by settingsProvider.settingsState.collectAsStateWithLifecycle()
     val port = settings?.playbackProxyServerPort ?: 14769
     val scope = rememberCoroutineScope()
+    val audioManager = remember {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
 
     val audioAttributes = remember {
         AudioAttributes.Builder()
@@ -153,6 +160,7 @@ actual fun AutoMixDialog(
     var eqB by remember { mutableStateOf<Equalizer?>(null) }
     var sessionA by remember { mutableStateOf(0) }
     var sessionB by remember { mutableStateOf(0) }
+    var focusRequest by remember { mutableStateOf<AudioFocusRequest?>(null) }
 
     fun activePlayer() = if (activeIsA) deckA else deckB
     fun idlePlayer() = if (activeIsA) deckB else deckA
@@ -300,9 +308,41 @@ actual fun AutoMixDialog(
         preloadNext()
     }
 
+    fun startBackgroundPlayback() {
+        AutoMixForegroundService.start(context.applicationContext)
+        if (focusRequest == null) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setOnAudioFocusChangeListener { change ->
+                    if (
+                        change == AudioManager.AUDIOFOCUS_LOSS ||
+                        change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
+                    ) {
+                        deckA.pause()
+                        deckB.pause()
+                        isPlaying = false
+                    }
+                }
+                .build()
+            runCatching { audioManager.requestAudioFocus(request) }
+            focusRequest = request
+        }
+    }
+
+    fun stopBackgroundPlayback() {
+        deckA.pause()
+        deckB.pause()
+        isPlaying = false
+        focusRequest?.let { request ->
+            runCatching { audioManager.abandonAudioFocusRequest(request) }
+        }
+        focusRequest = null
+        AutoMixForegroundService.stop(context.applicationContext)
+    }
+
     LaunchedEffect(visible, tracks) {
         if (tracks.isEmpty()) return@LaunchedEffect
         mainPlayer.pause()
+        startBackgroundPlayback()
         queue = smartOrder(tracks)
         index = 0
         activeIsA = true
@@ -391,6 +431,9 @@ actual fun AutoMixDialog(
     }
     DisposableEffect(eqA) { onDispose { runCatching { eqA?.release() } } }
     DisposableEffect(eqB) { onDispose { runCatching { eqB?.release() } } }
+    DisposableEffect(Unit) {
+        onDispose { stopBackgroundPlayback() }
+    }
 
     LaunchedEffect(sessionA, sessionB) {
         if (eqA == null && sessionA != 0) attachEqualizer(sessionA, isA = true)
@@ -399,10 +442,7 @@ actual fun AutoMixDialog(
 
     Dialog(
         onDismissRequest = {
-            if (isPlaying) {
-                deckA.pause()
-                deckB.pause()
-            }
+            stopBackgroundPlayback()
             onDismiss()
         },
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -433,8 +473,7 @@ actual fun AutoMixDialog(
                         icon = Iconsax.SpotifyChevronDown,
                         contentDescription = stringResource(Res.string.auto_mix_close),
                         onClick = {
-                            deckA.pause()
-                            deckB.pause()
+                            stopBackgroundPlayback()
                             onDismiss()
                         }
                     )

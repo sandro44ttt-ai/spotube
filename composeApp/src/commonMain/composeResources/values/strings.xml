@@ -265,6 +265,7 @@
     <string name="auto_mix_style_cut">Cut</string>
     <string name="auto_mix_style_blend">Blend</string>
     <string name="auto_mix_style_mashup">Mashup</string>
+    <string name="auto_mix_notification_text">Automatic mixing is running</string>
     <string name="settings_playback_port_title">Playback proxy server port</string>
     <string name="settings_allow_remote_control_title">Allow remote control</string>
     <string name="settings_allow_remote_control_subtitle">Let other devices on the same network control playback when they connect.</string>
