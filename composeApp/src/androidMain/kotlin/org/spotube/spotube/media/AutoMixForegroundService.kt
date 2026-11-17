@@ -73,7 +73,7 @@ class AutoMixForegroundService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
         startForeground(NOTIFICATION_ID, notification)
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
