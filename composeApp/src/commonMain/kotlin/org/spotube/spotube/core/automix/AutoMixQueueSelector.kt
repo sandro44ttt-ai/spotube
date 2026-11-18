@@ -64,6 +64,7 @@ object AutoMixQueueSelector {
         val vocalLoad = currentFeatures.vocalness + candidateFeatures.vocalness
         if (vocalLoad > 1.15f) score += 35f
         if (!candidateFeatures.analysisComplete) score += 60f
+        score += (1f - minOf(currentFeatures.bpmConfidence, candidateFeatures.bpmConfidence)) * 25f
         score -= candidateFeatures.confidence * 2f
         return score
     }

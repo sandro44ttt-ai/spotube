@@ -111,12 +111,17 @@ object AutoMixPlanner {
         val fullFeatures = currentFeatures?.analysisComplete == true &&
             nextFeatures?.analysisComplete == true
         val vocalConflict = vocalA > 0.65f && vocalB > 0.65f
+        val bpmConfidence = minOf(
+            currentFeatures?.bpmConfidence ?: 0f,
+            nextFeatures?.bpmConfidence ?: 0f
+        )
         val compatibleBase = bothLong &&
             fullFeatures &&
             tempoRatio != null &&
             pitchShift != null &&
             keyDistance <= 1 &&
             energyDistance < 0.55f &&
+            bpmConfidence >= 0.55f &&
             !vocalConflict
         val absPitch = abs(pitchShift ?: 0)
 
@@ -192,6 +197,7 @@ object AutoMixPlanner {
         val canBlend = tempoRatio != null &&
             pitchShift != null &&
             keyDistance <= 1 &&
+            bpmConfidence >= 0.4f &&
             energyDistance < 0.65f
         if (canBlend) {
             val bars = if (seed % 2 == 0) 8 else 16

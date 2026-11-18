@@ -251,7 +251,9 @@ class AudioFeatureAnalyzer(
         val real = FloatArray(fftSize)
         val imag = FloatArray(fftSize)
         val previousMagnitude = FloatArray(fftSize / 2)
+        val previousLowMagnitude = FloatArray(fftSize / 2)
         val flux = FloatArray(frameCount)
+        val lowFlux = FloatArray(frameCount)
         val chroma = DoubleArray(12)
         var midBandMagnitude = 0.0
         var totalMagnitude = 0.0
@@ -271,6 +273,11 @@ class AudioFeatureAnalyzer(
                 if (difference > 0f) flux[frame] += difference
                 previousMagnitude[bin] = magnitude
                 val frequency = bin.toFloat() * sampleRate / fftSize
+                if (frequency in 20f..150f) {
+                    val lowDifference = magnitude - previousLowMagnitude[bin]
+                    if (lowDifference > 0f) lowFlux[frame] += lowDifference
+                }
+                previousLowMagnitude[bin] = magnitude
                 totalMagnitude += magnitude
                 if (frequency in 300f..3000f) midBandMagnitude += magnitude
                 if (frequency in 80f..2000f) {
@@ -294,6 +301,22 @@ class AudioFeatureAnalyzer(
             flux[index] = ((flux[index] - mean.toFloat()) / deviation).coerceAtLeast(0f)
         }
 
+        var lowMean = 0.0
+        for (value in lowFlux) lowMean += value
+        lowMean /= lowFlux.size
+        var lowVariance = 0.0
+        for (value in lowFlux) {
+            val delta = value - lowMean
+            lowVariance += delta * delta
+        }
+        val lowDeviation = sqrt(lowVariance / lowFlux.size)
+            .toFloat()
+            .coerceAtLeast(1e-6f)
+        for (index in lowFlux.indices) {
+            lowFlux[index] = ((lowFlux[index] - lowMean.toFloat()) / lowDeviation)
+                .coerceAtLeast(0f)
+        }
+
         val minLag = (frameRate * 60f / 200f).toInt().coerceAtLeast(2)
         val maxLag = (frameRate * 60f / 60f).toInt().coerceAtLeast(minLag + 1)
         var bestLag = 0
@@ -301,7 +324,8 @@ class AudioFeatureAnalyzer(
         for (lag in minLag..maxLag) {
             var score = 0f
             for (index in 0 until flux.size - lag) {
-                score += flux[index] * flux[index + lag]
+                score += flux[index] * flux[index + lag] * 0.35f +
+                    lowFlux[index] * lowFlux[index + lag] * 0.65f
             }
             val bpm = frameRate * 60f / lag
             val preference = when {
@@ -331,9 +355,47 @@ class AudioFeatureAnalyzer(
         while (bpm < 70f) bpm *= 2f
         while (bpm > 180f) bpm /= 2f
 
+        val onsetBpm = estimateOnsetBpm(lowFlux, frameRate)
+        var bpmConfidence = 0.55f
+        if (onsetBpm != null) {
+            val directDelta = abs(onsetBpm - bpm) / bpm
+            val halfDelta = abs(bpm / 2f - onsetBpm) / (bpm / 2f)
+            val doubleDelta = abs(bpm * 2f - onsetBpm) / (bpm * 2f)
+            when {
+                directDelta <= 0.07f -> {
+                    bpm = bpm * 0.5f + onsetBpm * 0.5f
+                    bpmConfidence = 0.92f
+                }
+                bpm > 135f && halfDelta <= 0.08f -> {
+                    bpm = onsetBpm
+                    bpmConfidence = 0.88f
+                }
+                bpm < 78f && doubleDelta <= 0.08f -> {
+                    bpm = onsetBpm
+                    bpmConfidence = 0.82f
+                }
+                else -> {
+                    val nearest = listOf(bpm, bpm / 2f, bpm * 2f)
+                        .minByOrNull { abs(it - onsetBpm) }
+                    if (nearest != null &&
+                        abs(nearest - onsetBpm) / onsetBpm <= 0.12f
+                    ) {
+                        bpm = nearest
+                        bpmConfidence = 0.72f
+                    } else {
+                        bpmConfidence = 0.45f
+                    }
+                }
+            }
+        }
+        while (bpm < 65f) bpm *= 2f
+        while (bpm > 190f) bpm /= 2f
+
         var bestPhase = 0
         var bestPhaseScore = -Float.MAX_VALUE
-        val lag = bestLag
+        val lag = (frameRate * 60f / bpm)
+            .roundToInt()
+            .coerceIn(2, flux.size - 1)
         for (phase in 0 until lag) {
             var score = 0f
             var index = phase
@@ -439,6 +501,7 @@ class AudioFeatureAnalyzer(
 
         return AudioFeatures(
             bpm = bpm,
+            bpmConfidence = bpmConfidence,
             beatOffsetSeconds = beatOffset,
             key = keyResult.label,
             keyRoot = keyResult.root,
@@ -450,7 +513,7 @@ class AudioFeatureAnalyzer(
             outroStartFraction = outroStart,
             dropFraction = dropFraction,
             vocalness = vocalness,
-            confidence = 0.65f,
+            confidence = (bpmConfidence * 0.6f + 0.4f).coerceIn(0.3f, 0.95f),
             durationSeconds = totalSeconds,
             swingRatio = swingRatio,
             transientOffsetMs = transientOffsetMs,
@@ -510,6 +573,34 @@ class AudioFeatureAnalyzer(
         return result
     }
 
+    private fun estimateOnsetBpm(lowFlux: FloatArray, frameRate: Float): Float? {
+        if (lowFlux.size < 8) return null
+        val peaks = mutableListOf<Int>()
+        var index = 1
+        while (index < lowFlux.size - 1) {
+            if (lowFlux[index] >= 0.32f &&
+                lowFlux[index] >= lowFlux[index - 1] &&
+                lowFlux[index] >= lowFlux[index + 1]
+            ) {
+                peaks += index
+                index += 2
+            } else {
+                index++
+            }
+        }
+        if (peaks.size < 4) return null
+        val minInterval = (frameRate * 60f / 190f).toInt().coerceAtLeast(2)
+        val maxInterval = (frameRate * 60f / 65f).toInt()
+        val intervals = peaks.zipWithNext { first, second -> second - first }
+            .filter { it in minInterval..maxInterval }
+            .sorted()
+        if (intervals.size < 3) return null
+        val median = intervals[intervals.size / 2].toFloat()
+        var bpm = 60f * frameRate / median
+        while (bpm < 65f) bpm *= 2f
+        while (bpm > 190f) bpm /= 2f
+        return bpm
+    }
     private fun autocorrelation(values: FloatArray, lag: Int): Float {
         if (lag <= 0 || lag >= values.size) return 0f
         var score = 0f

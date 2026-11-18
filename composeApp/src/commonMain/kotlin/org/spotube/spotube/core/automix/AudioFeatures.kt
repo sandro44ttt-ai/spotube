@@ -25,6 +25,7 @@ data class AudioSection(
 @Serializable
 data class AudioFeatures(
     val bpm: Float = 0f,
+    val bpmConfidence: Float = 0.5f,
     val beatOffsetSeconds: Float = 0f,
     val key: String = "",
     val keyRoot: Int = 0,

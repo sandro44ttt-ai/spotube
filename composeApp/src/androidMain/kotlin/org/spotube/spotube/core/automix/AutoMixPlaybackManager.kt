@@ -651,7 +651,8 @@ class AutoMixPlaybackManager(
                 "${track.title.take(18)} bpm=${f?.bpm?.roundToInt()} " +
                     "key=${f?.key} full=${f?.analysisComplete}"
             }
-        )        val newNext = queue.getOrNull(start)
+        )
+        val newNext = queue.getOrNull(start)
         if (newNext?.id != next?.id) {
             next = newNext
             newNext?.let { loadTrack(idlePlayer(), it, 0f) }
