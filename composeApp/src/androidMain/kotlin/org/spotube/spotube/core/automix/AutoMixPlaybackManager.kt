@@ -593,11 +593,11 @@ class AutoMixPlaybackManager(
                 )
                 while (isStarted) {
                     val candidates = buildList {
+                        current?.let { add(it) }
                         val end = min(queue.lastIndex, index + 6)
                         for (position in index + 1..end) {
                             queue.getOrNull(position)?.let { add(it) }
                         }
-                        current?.let { add(it) }
                     }.distinctBy { it.id }
                         .filter { !features.containsKey(it.id) }
                     if (candidates.isEmpty()) break
