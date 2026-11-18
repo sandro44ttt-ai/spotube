@@ -326,6 +326,7 @@ kotlin {
                 implementation(libs.media3.exoplayer)
                 implementation(libs.media3.session)
                 implementation(libs.androidx.media)
+                implementation(libs.onnxruntime.android)
             }
         }
         val iosMain by creating {

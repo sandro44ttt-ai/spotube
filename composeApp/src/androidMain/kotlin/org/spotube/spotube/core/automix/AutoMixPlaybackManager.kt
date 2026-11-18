@@ -2,9 +2,11 @@ package org.spotube.spotube.core.automix
 
 import android.content.Context
 import android.media.AudioFocusRequest
+import android.net.Uri
 import android.media.AudioManager
 import android.util.Log
 import androidx.media3.common.AudioAttributes
+import androidx.media3.common.MediaItem
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import org.spotube.plugin_interfaces.plugin_apis.metadata.track.MetadataTrack
 import org.spotube.plugin_interfaces.plugin_apis.audio.StreamProtocol
 import org.spotube.spotube.core.server.StreamRequest
@@ -43,9 +46,12 @@ class AutoMixPlaybackManager(
     private val settingsProvider: SettingsProvider,
     private val pluginProvider: PluginProvider,
     private val analyzer: AudioFeatureAnalyzer,
-    private val streamingUrlRepository: StreamingUrlRepository
+    private val streamingUrlRepository: StreamingUrlRepository,
+    private val stemSeparator: StemSeparator,
+    private val stemRenderer: StemTransitionRenderer
 ) {
     enum class TransitionStyle { Cut, Blend, Mashup }
+    enum class StemPhase { Idle, Downloading, Separating, Ready, Error }
 
     data class State(
         val isActive: Boolean = false,
@@ -69,7 +75,9 @@ class AutoMixPlaybackManager(
         val transitionKind: TransitionKind = TransitionKind.HardCut,
         val planReason: String = "",
         val planLevel: AutoMixLevel? = null,
-        val planVibeDistance: Float = 1f
+        val planVibeDistance: Float = 1f,
+        val stemPhase: StemPhase = StemPhase.Idle,
+        val stemProgress: Float = 0f
     )
 
     private val _state = MutableStateFlow(State())
@@ -84,6 +92,9 @@ class AutoMixPlaybackManager(
         .build()
     private val dspA = MixDspProcessor()
     private val dspB = MixDspProcessor()
+    private val clipDeck = ExoPlayer.Builder(context)
+        .setAudioAttributes(audioAttributes, false)
+        .build()
     private val deckA = ExoPlayer.Builder(context)
         .setRenderersFactory(AutoMixRenderersFactory(context, dspA))
         .setAudioAttributes(audioAttributes, false)
@@ -119,6 +130,12 @@ class AutoMixPlaybackManager(
     private var transitionJob: Job? = null
     private var loopJob: Job? = null
     private var analysisJob: Job? = null
+    private var stemJob: Job? = null
+    private var stemPhase: StemPhase = StemPhase.Idle
+    private var stemProgress: Float = 0f
+    private var clipPreparedFile: File? = null
+    private var clipTransitioning: Boolean = false
+    private var clipDurationMs: Long = 0L
     private val features = mutableMapOf<String, AudioFeatures>()
     private var activeSpeed: Float = 1f
     private var activePitchSemitones: Int = 0
@@ -185,6 +202,12 @@ class AutoMixPlaybackManager(
         planLevel = null
         planVibeDistance = 1f
         planReason = ""
+        stemPhase = StemPhase.Idle
+        stemProgress = 0f
+        clipPreparedFile = null
+        clipTransitioning = false
+        clipDeck.stop()
+        clipDeck.clearMediaItems()
         queue.clear()
         features.clear()
         activeSpeed = 1f
@@ -225,10 +248,17 @@ class AutoMixPlaybackManager(
         transitionJob?.cancel()
         analysisJob?.cancel()
         loopJob?.cancel()
+        stemJob?.cancel()
+        stemJob = null
+        clipTransitioning = false
         pollJob = null
         transitionJob = null
         analysisJob = null
         loopJob = null
+        clipDeck.pause()
+        clipDeck.stop()
+        clipDeck.clearMediaItems()
+        clipPreparedFile = null
         deckA.pause()
         deckB.pause()
         deckA.playbackParameters = PlaybackParameters(1f)
@@ -254,12 +284,94 @@ class AutoMixPlaybackManager(
         if (isPlaying) {
             deckA.pause()
             deckB.pause()
+            clipDeck.pause()
             isPlaying = false
         } else {
             activePlayer().play()
             isPlaying = true
         }
         publish()
+    }
+
+    fun prepareStems() {
+        if (stemJob?.isActive == true) return
+        val currentTrack = current ?: return
+        val nextTrack = next ?: return
+        val plan = currentPlan() ?: return
+        stemJob = scope.launch {
+            try {
+                stemPhase = StemPhase.Downloading
+                stemProgress = 0f
+                publish()
+                val model = stemSeparator.ensureModel { progress ->
+                    stemProgress = progress
+                    _state.update { it.copy(stemPhase = StemPhase.Downloading, stemProgress = progress) }
+                }
+                if (model == null) {
+                    stemPhase = StemPhase.Error
+                    publish()
+                    return@launch
+                }
+                stemPhase = StemPhase.Separating
+                stemProgress = 0f
+                publish()
+                val settings = settingsProvider.settingsState.value ?: return@launch
+                val request = StreamRequest(
+                    format = settings.streamingMusicFormat,
+                    quality = settings.streamingMusicQuality,
+                    progressiveOnly = true
+                )
+                val currentInfo = streamingUrlRepository.resolveStreamInfo(
+                    track = currentTrack,
+                    request = request
+                )
+                val nextInfo = streamingUrlRepository.resolveStreamInfo(
+                    track = nextTrack,
+                    request = request
+                )
+                if (currentInfo == null || nextInfo == null) {
+                    stemPhase = StemPhase.Error
+                    publish()
+                    return@launch
+                }
+                val clip = stemRenderer.render(
+                    currentId = currentTrack.id,
+                    currentUrl = currentInfo.url,
+                    nextId = nextTrack.id,
+                    nextUrl = nextInfo.url,
+                    outgoingCueMs = plan.outgoingCueMs,
+                    incomingCueMs = plan.incomingCueMs,
+                    durationMs = plan.durationMs,
+                    tempoRatio = plan.tempoRatio,
+                    pitchSemitones = plan.pitchSemitones,
+                    onProgress = { progress ->
+                        stemProgress = progress
+                        _state.update { it.copy(stemPhase = StemPhase.Separating, stemProgress = progress) }
+                    }
+                )
+                if (clip == null) {
+                    stemPhase = StemPhase.Error
+                    publish()
+                    return@launch
+                }
+                clipPreparedFile = clip
+                clipDeck.stop()
+                clipDeck.setMediaItem(MediaItem.fromUri(Uri.fromFile(clip)))
+                clipDeck.prepare()
+                clipDeck.volume = 0f
+                stemPhase = StemPhase.Ready
+                stemProgress = 1f
+                publish()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("AutoMix", "stem preparation failed: ${e.message}")
+                stemPhase = StemPhase.Error
+                publish()
+            } finally {
+                stemJob = null
+            }
+        }
     }
 
     private fun skipNext() {
@@ -324,6 +436,25 @@ class AutoMixPlaybackManager(
         val plan = currentPlan() ?: return
         val from = activePlayer()
         val to = idlePlayer()
+        val clip = stemRenderer.clipFor(
+            currentId = current?.id.orEmpty(),
+            nextId = target.id,
+            outgoingCueMs = plan.outgoingCueMs,
+            incomingCueMs = plan.incomingCueMs,
+            durationMs = plan.durationMs,
+            tempoRatio = plan.tempoRatio,
+            pitchSemitones = plan.pitchSemitones
+        )
+        val clipOffsetMs = (from.currentPosition - plan.outgoingCueMs).coerceAtLeast(0L)
+        if (
+            clip != null &&
+            clip == clipPreparedFile &&
+            clipOffsetMs <= 1_500L &&
+            plan.durationMs - clipOffsetMs >= 3_000L
+        ) {
+            startStemTransition(plan, target, from, to, clip, clipOffsetMs)
+            return
+        }
         val fromDsp = if (activeIsA) dspA else dspB
         val toDsp = if (activeIsA) dspB else dspA
         fromDsp.resetEffects()
@@ -442,6 +573,95 @@ class AutoMixPlaybackManager(
         }
     }
 
+    private fun startStemTransition(
+        plan: TransitionPlan,
+        target: MetadataTrack,
+        from: ExoPlayer,
+        to: ExoPlayer,
+        clip: File,
+        offsetMs: Long
+    ) {
+        val pitchFactor = 2.0.pow(plan.pitchSemitones / 12.0).toFloat()
+        val playbackParameters = PlaybackParameters(plan.tempoRatio, pitchFactor)
+        analysisJob?.cancel()
+        analysisJob = null
+        isTransitioning = true
+        clipTransitioning = true
+        transitionKind = plan.kind
+        transitionStyle = TransitionStyle.Mashup
+        planReason = plan.reason + " stems"
+        planLevel = plan.level
+        planVibeDistance = plan.vibeDistance
+        transitionProgress = 0f
+        clipDurationMs = (plan.durationMs - offsetMs).coerceAtLeast(1L)
+        if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
+        if (activeIsA) dspB.resetEffects() else dspA.resetEffects()
+        from.volume = 0f
+        from.pause()
+        to.playbackParameters = playbackParameters
+        to.seekTo((plan.incomingCueMs + plan.incomingOffsetMs + offsetMs).coerceAtLeast(0L))
+        to.volume = 0f
+        to.play()
+        clipDeck.stop()
+        clipDeck.setMediaItem(MediaItem.fromUri(Uri.fromFile(clip)))
+        clipDeck.playbackParameters = playbackParameters
+        clipDeck.prepare()
+        clipDeck.seekTo(offsetMs)
+        clipDeck.volume = 1f
+        clipDeck.play()
+        transitionJob = scope.launch {
+            try {
+                val wallDurationMs = (clipDurationMs / plan.tempoRatio.coerceAtLeast(0.1f)).toLong()
+                val steps = (wallDurationMs / 50L).toInt().coerceAtLeast(1)
+                for (step in 1..steps) {
+                    val t = step.toFloat() / steps.toFloat()
+                    transitionProgress = t
+                    if (t > 0.90f) {
+                        val fade = ((t - 0.90f) / 0.10f).coerceIn(0f, 1f)
+                        clipDeck.volume = 1f - fade
+                        to.volume = fade
+                    }
+                    if (step % 2 == 0 || step == steps) publish()
+                    delay(50)
+                }
+                clipDeck.pause()
+                clipDeck.volume = 0f
+                clipDeck.stop()
+                clipDeck.clearMediaItems()
+                to.volume = 1f
+                activeIsA = !activeIsA
+                activeSpeed = plan.tempoRatio
+                activePitchSemitones = plan.pitchSemitones
+                index += 1
+                current = target
+                positionMs = 0L
+                durationMs = 0L
+                clipTransitioning = false
+                clipPreparedFile = null
+                isTransitioning = false
+                transitionProgress = 0f
+                preloadNext()
+                ensureAnalysis()
+                publish()
+            } catch (e: Exception) {
+                Log.e("AutoMix", "stem transition failed", e)
+                lastError = "stem transition: ${e.message.orEmpty()}"
+                clipDeck.pause()
+                clipDeck.stop()
+                clipDeck.clearMediaItems()
+                clipTransitioning = false
+                clipPreparedFile = null
+                to.pause()
+                to.volume = 0f
+                from.volume = 1f
+                from.play()
+                isTransitioning = false
+                transitionProgress = 0f
+                publish()
+            }
+        }
+    }
+
     private fun startLoop(player: ExoPlayer, spec: LoopSpec) {
         loopJob?.cancel()
         loopJob = scope.launch {
@@ -476,6 +696,12 @@ class AutoMixPlaybackManager(
                 publish()
             }
             return
+        }
+        if (next?.id != target.id) {
+            clipPreparedFile = null
+            clipDeck.stop()
+            clipDeck.clearMediaItems()
+            if (stemPhase == StemPhase.Ready) stemPhase = StemPhase.Idle
         }
         next = target
         loadTrack(idlePlayer(), target, 0f)
@@ -523,6 +749,7 @@ class AutoMixPlaybackManager(
                 ) {
                     deckA.pause()
                     deckB.pause()
+                    clipDeck.pause()
                     isPlaying = false
                     publish()
                 }
@@ -543,8 +770,14 @@ class AutoMixPlaybackManager(
         AutoMixController.setPlaybackActive(isStarted)
         val currentFeatures = current?.let { features[it.id] }
         val nextFeatures = next?.let { features[it.id] }
-        val player = activePlayer()
-        val session = if (activeIsA) sessionA else sessionB
+        val player = if (clipTransitioning) clipDeck else activePlayer()
+        val session = if (clipTransitioning) 0 else if (activeIsA) sessionA else sessionB
+        val displayPosition = if (clipTransitioning) {
+            clipDeck.currentPosition.coerceAtLeast(0L)
+        } else {
+            positionMs
+        }
+        val displayDuration = if (clipTransitioning) clipDurationMs else durationMs
         _state.value = State(
             isActive = isStarted,
             title = title,
@@ -554,8 +787,8 @@ class AutoMixPlaybackManager(
             isTransitioning = isTransitioning,
             transitionProgress = transitionProgress,
             transitionStyle = transitionStyle,
-            positionMs = positionMs,
-            durationMs = durationMs,
+            positionMs = displayPosition,
+            durationMs = displayDuration,
             currentBpm = currentFeatures?.bpm?.times(activeSpeed),
             currentKey = currentFeatures?.key.orEmpty(),
             nextBpm = nextFeatures?.bpm,
@@ -574,7 +807,9 @@ class AutoMixPlaybackManager(
             transitionKind = transitionKind,
             planReason = planReason,
             planLevel = planLevel,
-            planVibeDistance = planVibeDistance
+            planVibeDistance = planVibeDistance,
+            stemPhase = stemPhase,
+            stemProgress = stemProgress
         )
     }
 

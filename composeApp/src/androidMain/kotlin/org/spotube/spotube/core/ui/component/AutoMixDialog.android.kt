@@ -56,6 +56,11 @@ import spotube.composeapp.generated.resources.auto_mix_pause
 import spotube.composeapp.generated.resources.auto_mix_play
 import spotube.composeapp.generated.resources.auto_mix_style_blend
 import spotube.composeapp.generated.resources.auto_mix_style_cut
+import spotube.composeapp.generated.resources.auto_mix_stems
+import spotube.composeapp.generated.resources.auto_mix_stems_downloading
+import spotube.composeapp.generated.resources.auto_mix_stems_error
+import spotube.composeapp.generated.resources.auto_mix_stems_ready
+import spotube.composeapp.generated.resources.auto_mix_stems_separating
 import spotube.composeapp.generated.resources.auto_mix_style_mashup
 import spotube.composeapp.generated.resources.auto_mix_title
 import spotube.composeapp.generated.resources.auto_mix_transitioning
@@ -283,6 +288,51 @@ actual fun AutoMixDialog(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(Res.string.auto_mix_stems),
+                        style = AppTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SpotifyTokens.Green
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { manager.prepareStems() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                    val stemStatus = when (state.stemPhase) {
+                        AutoMixPlaybackManager.StemPhase.Downloading ->
+                            stringResource(
+                                Res.string.auto_mix_stems_downloading,
+                                (state.stemProgress * 100).roundToInt()
+                            )
+                        AutoMixPlaybackManager.StemPhase.Separating ->
+                            stringResource(
+                                Res.string.auto_mix_stems_separating,
+                                (state.stemProgress * 100).roundToInt()
+                            )
+                        AutoMixPlaybackManager.StemPhase.Ready ->
+                            stringResource(Res.string.auto_mix_stems_ready)
+                        AutoMixPlaybackManager.StemPhase.Error ->
+                            stringResource(Res.string.auto_mix_stems_error)
+                        AutoMixPlaybackManager.StemPhase.Idle -> ""
+                    }
+                    if (stemStatus.isNotBlank()) {
+                        Text(
+                            text = stemStatus,
+                            style = AppTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                color = SpotifyTokens.Muted
+                            )
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
