@@ -64,6 +64,8 @@ import org.spotube.spotube.core.navigation.NavigationCommands
 import org.spotube.spotube.core.navigation.NavigationState
 import org.spotube.spotube.core.navigation.Navigator
 import org.spotube.spotube.core.navigation.Routes
+import org.spotube.spotube.core.automix.AutoMixController
+import org.spotube.spotube.core.ui.component.AutoMixMiniPlayer
 import org.spotube.spotube.core.remote.ConnectionRequestDialogHost
 import org.spotube.spotube.core.remote.RemotePlaybackController
 import org.spotube.spotube.modules.devices.PlayDestinationPickerHost
@@ -322,6 +324,7 @@ internal fun CompactPlayerOverlay(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val chromeUiState by viewModel.compactChromeUiState.collectAsState()
+    val autoMixActive by AutoMixController.playbackActive.collectAsState()
 
     val floatingPlayerHeightPx = with(density) { viewModel.floatingPlayerHeight.toPx() }
     val navBarInsetPx = WindowInsets.navigationBars.getBottom(density).toFloat()
@@ -383,7 +386,7 @@ internal fun CompactPlayerOverlay(
         ) {
             Sheet(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (expandedPlayerComposed) {
+                    if (expandedPlayerComposed && !autoMixActive) {
                         expandedPlayer(
                             Modifier
                                 .fillMaxSize()
@@ -398,12 +401,16 @@ internal fun CompactPlayerOverlay(
                     // Always composed: building it (view model, cover art, player state) only once
                     // progress drops below the fade-out point stalls the collapse mid-drag.
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        floatingPlayer(
-                            Modifier
-                                .zeroSizeUnless(floatingPlayerVisible)
-                                .graphicsLayer {
-                                    alpha = viewModel.floatingPlayerAlpha(progress)
-                                })
+                        val playerModifier = Modifier
+                            .zeroSizeUnless(floatingPlayerVisible)
+                            .graphicsLayer {
+                                alpha = viewModel.floatingPlayerAlpha(progress)
+                            }
+                        if (autoMixActive) {
+                            AutoMixMiniPlayer(playerModifier)
+                        } else {
+                            floatingPlayer(playerModifier)
+                        }
                     }
                 }
             }

@@ -20,7 +20,6 @@ package org.spotube.spotube
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -48,7 +47,6 @@ import org.spotube.spotube.core.navigation.navPushTransitionSpec
 import org.spotube.spotube.core.navigation.rememberNavigationState
 import org.spotube.spotube.core.navigation.toEntries
 import org.spotube.spotube.core.ui.component.AutoMixDialog
-import org.spotube.spotube.core.ui.component.AutoMixMiniPlayer
 import org.spotube.spotube.core.ui.component.LocalSharedTransitionScope
 import org.spotube.spotube.core.ui.theming.SpotubeTheme
 import org.spotube.spotube.modules.library.LibraryTab
@@ -298,14 +296,6 @@ fun App(
                     tracks = autoMixSession?.tracks.orEmpty(),
                     onDismiss = AutoMixController::hide
                 )
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-                    AutoMixMiniPlayer(
-                        Modifier.padding(start = 8.dp, end = 8.dp, bottom = 88.dp)
-                    )
-                }
             }
         }
     }

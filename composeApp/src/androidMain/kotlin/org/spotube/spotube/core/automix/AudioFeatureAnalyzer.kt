@@ -1,11 +1,20 @@
 package org.spotube.spotube.core.automix
 
+import android.content.Context
 import android.media.AudioFormat
+import android.util.Log
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.HttpHeaders
+import io.ktor.http.isSuccess
+import io.ktor.utils.io.readAvailable
+import java.io.File
+import java.io.FileOutputStream
 import java.nio.ByteOrder
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
@@ -18,7 +27,9 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 class AudioFeatureAnalyzer(
-    private val cache: MixAnalysisCache
+    private val context: Context,
+    private val cache: MixAnalysisCache,
+    private val httpClientFactory: org.spotube.spotube.core.network.HttpClientFactory
 ) {
     private val memory = ConcurrentHashMap<String, AudioFeatures>()
 
@@ -37,8 +48,12 @@ class AudioFeatureAnalyzer(
                     return@withContext cached
                 }
             }
-            val samples = decodeMono(url, if (fullTrack) MAX_ANALYSIS_SECONDS else LIGHT_ANALYSIS_SECONDS)
-                ?: return@withContext null
+            val file = downloadTrack(url) ?: return@withContext null
+            val samples = try {
+                decodeMono(file.absolutePath, if (fullTrack) MAX_ANALYSIS_SECONDS else LIGHT_ANALYSIS_SECONDS)
+            } finally {
+                file.delete()
+            } ?: return@withContext null
             val features = computeFeatures(samples, ANALYSIS_SAMPLE_RATE, fullTrack)
                 ?: return@withContext null
             val stamped = features.copy(
@@ -49,6 +64,39 @@ class AudioFeatureAnalyzer(
             cache.put(trackId, stamped)
             stamped
         }
+
+    private suspend fun downloadTrack(url: String): File? {
+        val file = File.createTempFile("automix-analysis-", ".audio", context.cacheDir)
+        return runCatching {
+            val response = httpClientFactory.default.get(url) {
+                headers.append(HttpHeaders.UserAgent, "Mozilla/5.0")
+                headers.append(HttpHeaders.Accept, "*/*")
+            }
+            if (!response.status.isSuccess()) {
+                file.delete()
+                return@runCatching null
+            }
+            val channel = response.bodyAsChannel()
+            FileOutputStream(file).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val read = channel.readAvailable(buffer, 0, buffer.size)
+                    if (read < 0) break
+                    if (read > 0) output.write(buffer, 0, read)
+                }
+            }
+            if (file.length() < 32 * 1024L) {
+                file.delete()
+                null
+            } else {
+                file
+            }
+        }.getOrElse { error ->
+            file.delete()
+            Log.w("AutoMix", "analysis download failed: ${error.message}")
+            null
+        }
+    }
 
     private fun decodeMono(url: String, maxSeconds: Long): FloatArray? {
         var extractor: MediaExtractor? = null
@@ -181,7 +229,8 @@ class AudioFeatureAnalyzer(
             }
             if (outputSize < ANALYSIS_SAMPLE_RATE * 10) return null
             output.copyOf(outputSize)
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w("AutoMix", "analysis decode failed: ${error.message}")
             null
         } finally {
             runCatching { decoder?.stop() }

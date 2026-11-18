@@ -378,6 +378,10 @@ class AutoMixPlaybackManager(
                 transitionProgress = t
                 from.volume = sqrt(1f - t)
                 to.volume = sqrt(t)
+                if (t > 0.75f) {
+                    toDsp.gain = headroomGain +
+                        (1f - headroomGain) * ((t - 0.75f) / 0.25f)
+                }
                 if (plan.kind == TransitionKind.SafeBlend) {
                     secondaryDsp.lowPassHz = 20_000f - 12_000f * t * t
                 }
@@ -394,7 +398,13 @@ class AutoMixPlaybackManager(
             loopJob?.cancel()
             loopJob = null
             fromDsp.resetEffects()
-            toDsp.resetEffects()
+            toDsp.highPassHz = 20f
+            toDsp.lowPassHz = 20_000f
+            toDsp.echoMix = 0f
+            toDsp.echoFeedback = 0f
+            toDsp.midDipDb = 0f
+            toDsp.centerAttenuationDb = 0f
+            toDsp.gain = 1f
             from.pause()
             from.volume = 1f
             to.volume = 1f
@@ -649,7 +659,7 @@ class AutoMixPlaybackManager(
                 val attemptedFull = mutableSetOf<String>()
                 val attemptedLight = mutableSetOf<String>()
                 while (isStarted) {
-                    val lookaheadEnd = min(queue.lastIndex, index + 8)
+                    val lookaheadEnd = min(queue.lastIndex, index + 2)
                     val fullCandidates = buildList {
                         current?.let { add(it) }
                         for (position in index + 1..lookaheadEnd) {
@@ -686,7 +696,17 @@ class AutoMixPlaybackManager(
                     if (info == null || info.protocol != StreamProtocol.PROGRESSIVE) {
                         continue
                     }
-                    val result = analyzer.analyze(track.id, info.url, fullTrack) ?: continue
+                    Log.d("AutoMix", "analysis start: ${track.id} full=$fullTrack")
+                    val result = analyzer.analyze(track.id, info.url, fullTrack)
+                    if (result == null) {
+                        Log.w("AutoMix", "analysis failed: ${track.id} full=$fullTrack")
+                        continue
+                    }
+                    Log.d(
+                        "AutoMix",
+                        "analysis done: ${track.id} bpm=${result.bpm} " +
+                            "key=${result.key} full=${result.analysisComplete}"
+                    )
                     features[track.id] = result
                     refineQueue()
                     publish()
