@@ -42,6 +42,7 @@ data class TransitionPlan(
     val loopIn: LoopSpec? = null,
     val bars: Int = 8,
     val level: AutoMixLevel = AutoMixLevel.Safe,
+    val vibeDistance: Float = 1f,
     val loopBeats: Int = 0,
     val loopRoll: Boolean = false,
     val loopBpm: Float = 0f,
@@ -107,6 +108,11 @@ object AutoMixPlanner {
         } else {
             1f
         }
+        val vibeDistance = if (currentFeatures != null && nextFeatures != null) {
+            currentFeatures.vibe.distance(nextFeatures.vibe)
+        } else {
+            1f
+        }
         val bothLong = current.durationMs > 60_000L && next.durationMs > 60_000L
         val fullFeatures = currentFeatures?.analysisComplete == true &&
             nextFeatures?.analysisComplete == true
@@ -127,15 +133,18 @@ object AutoMixPlanner {
 
         val level = when {
             compatibleBase &&
+                vibeDistance <= 0.12f &&
                 swingDiff <= 0.18f &&
                 energyDistance < 0.5f &&
                 (absPitch <= 2) -> AutoMixLevel.Bold
 
             compatibleBase &&
+                vibeDistance <= 0.20f &&
                 swingDiff <= 0.14f &&
                 absPitch <= 1 -> AutoMixLevel.Mid
 
             compatibleBase &&
+                vibeDistance <= 0.30f &&
                 swingDiff <= 0.08f &&
                 absPitch == 0 -> AutoMixLevel.Safe
 
@@ -184,12 +193,13 @@ object AutoMixPlanner {
                 incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
                 bars = bars,
                 level = level,
+                vibeDistance = vibeDistance,
                 loopBeats = loopBeats,
                 loopRoll = level == AutoMixLevel.Bold && seed % 2 == 1,
                 loopBpm = nextBpm * (tempoRatio ?: 1f),
                 reason = "mashup ${level.name.lowercase()} ${bars}b: " +
                     "${currentBpm.roundToInt()}?${nextBpm.roundToInt()} BPM, " +
-                    "pitch ${pitchShift ?: 0}, key $keyDistance, " +
+                    "pitch ${pitchShift ?: 0}, key $keyDistance, vibe ${(vibeDistance * 100).roundToInt()}%, " +
                     "bass ${if (ownerIsA) "A" else "B"}, " +
                     "swing ${(swingDiff * 100).roundToInt()}%"
             )
@@ -218,8 +228,9 @@ object AutoMixPlanner {
                 headroomDb = -5f,
                 incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
                 bars = bars,
+                vibeDistance = vibeDistance,
                 reason = "blend ${bars}b: ${currentBpm.roundToInt()}→${nextBpm.roundToInt()} BPM, " +
-                    "pitch ${pitchShift ?: 0}, key $keyDistance, " +
+                    "pitch ${pitchShift ?: 0}, key $keyDistance, vibe ${(vibeDistance * 100).roundToInt()}%, " +
                     "bass ${if (ownerIsA) "A" else "B"}"
             )
         }
@@ -240,7 +251,9 @@ object AutoMixPlanner {
             headroomDb = -6f,
             incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
             bars = bars,
-            reason = "safe blend ${bars}b: key $keyDistance, BPM " +
+            level = AutoMixLevel.Safe,
+            vibeDistance = vibeDistance,
+            reason = "safe blend ${bars}b: key $keyDistance, vibe ${(vibeDistance * 100).roundToInt()}%, BPM " +
                 "${currentBpm.roundToInt()}→${nextBpm.roundToInt()}"
         )
     }

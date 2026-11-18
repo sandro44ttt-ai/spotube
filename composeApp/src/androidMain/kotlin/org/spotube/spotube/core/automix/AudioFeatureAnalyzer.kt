@@ -8,7 +8,9 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import io.ktor.client.request.get
+import kotlinx.coroutines.withTimeoutOrNull
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
@@ -29,7 +31,8 @@ import kotlin.math.sqrt
 class AudioFeatureAnalyzer(
     private val context: Context,
     private val cache: MixAnalysisCache,
-    private val httpClientFactory: org.spotube.spotube.core.network.HttpClientFactory
+    private val httpClientFactory: org.spotube.spotube.core.network.HttpClientFactory,
+    private val cacheManager: org.spotube.spotube.core.server.CacheManager
 ) {
     private val memory = ConcurrentHashMap<String, AudioFeatures>()
 
@@ -65,39 +68,61 @@ class AudioFeatureAnalyzer(
             stamped
         }
 
+    private fun cachedTrackFile(trackId: String): File? {
+        val path = cacheManager.findCachedEntry(trackId)?.first ?: return null
+        val file = File(path.toString())
+        return file.takeIf { it.exists() && it.length() > 32 * 1024L }
+    }
+
     private suspend fun downloadTrack(url: String): File? {
         val file = File.createTempFile("automix-analysis-", ".audio", context.cacheDir)
-        return runCatching {
-            val response = httpClientFactory.default.get(url) {
-                headers.append(HttpHeaders.UserAgent, "Mozilla/5.0")
-                headers.append(HttpHeaders.Accept, "*/*")
+        val client = httpClientFactory.create {
+            install(HttpTimeout) {
+                requestTimeoutMillis = 25_000
+                connectTimeoutMillis = 8_000
+                socketTimeoutMillis = 15_000
             }
-            if (!response.status.isSuccess()) {
-                file.delete()
-                return@runCatching null
-            }
-            val channel = response.bodyAsChannel()
-            FileOutputStream(file).use { output ->
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    val read = channel.readAvailable(buffer, 0, buffer.size)
-                    if (read < 0) break
-                    if (read > 0) output.write(buffer, 0, read)
+        }
+        return try {
+            val completed = withTimeoutOrNull(30_000L) {
+                client.prepareGet(url) {
+                    headers.append(HttpHeaders.UserAgent, "Mozilla/5.0")
+                    headers.append(HttpHeaders.Accept, "*/*")
+                }.execute { response ->
+                    if (!response.status.isSuccess()) {
+                        Log.w("AutoMix", "analysis HTTP ${response.status.value} for $url")
+                        return@execute false
+                    }
+                    var total = 0L
+                    val channel = response.bodyAsChannel()
+                    FileOutputStream(file).use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (total < MAX_ANALYSIS_BYTES) {
+                            val read = channel.readAvailable(buffer, 0, buffer.size)
+                            if (read < 0) break
+                            if (read > 0) {
+                                output.write(buffer, 0, read)
+                                total += read
+                            }
+                        }
+                    }
+                    Log.d("AutoMix", "analysis downloaded ${file.length()} bytes")
+                    file.length() > 32 * 1024L
                 }
-            }
-            if (file.length() < 32 * 1024L) {
+            } ?: false
+            if (completed) file else {
                 file.delete()
+                Log.w("AutoMix", "analysis download timeout for $url")
                 null
-            } else {
-                file
             }
-        }.getOrElse { error ->
+        } catch (error: Exception) {
             file.delete()
             Log.w("AutoMix", "analysis download failed: ${error.message}")
             null
+        } finally {
+            client.close()
         }
     }
-
     private fun decodeMono(url: String, maxSeconds: Long): FloatArray? {
         var extractor: MediaExtractor? = null
         var decoder: MediaCodec? = null
@@ -691,6 +716,7 @@ class AudioFeatureAnalyzer(
         private const val ANALYSIS_SAMPLE_RATE = 11_025
         private const val MAX_ANALYSIS_SECONDS = 360L
         private const val LIGHT_ANALYSIS_SECONDS = 45L
+        private const val MAX_ANALYSIS_BYTES = 16L * 1024 * 1024
 
         private val MAJOR_PROFILE = doubleArrayOf(
             6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88

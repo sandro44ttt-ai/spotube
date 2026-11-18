@@ -1,7 +1,9 @@
 package org.spotube.spotube.core.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,12 +27,16 @@ import com.composeunstyled.Text
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.spotube.spotube.core.automix.AutoMixController
+import org.spotube.spotube.core.automix.AutoMixLevel
 import org.spotube.spotube.core.automix.AutoMixPlaybackManager
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.theming.AppTheme
 import org.spotube.millennium.composables.MillenniumIcon
 import org.spotube.spotube.resources.iconsax.Iconsax
 import spotube.composeapp.generated.resources.Res
+import spotube.composeapp.generated.resources.auto_mix_level_bold
+import spotube.composeapp.generated.resources.auto_mix_level_mid
+import spotube.composeapp.generated.resources.auto_mix_level_safe
 import spotube.composeapp.generated.resources.auto_mix_pause
 import spotube.composeapp.generated.resources.auto_mix_play
 import spotube.composeapp.generated.resources.auto_mix_title
@@ -64,14 +70,20 @@ actual fun AutoMixMiniPlayer(modifier: Modifier) {
                 .weight(1f)
                 .padding(horizontal = 10.dp)
         ) {
-            Text(
-                text = stringResource(Res.string.auto_mix_title).uppercase(),
-                style = AppTheme.typography.labelSmall.copy(
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SpotifyTokens.Green
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(Res.string.auto_mix_title).uppercase(),
+                    style = AppTheme.typography.labelSmall.copy(
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SpotifyTokens.Green
+                    )
                 )
-            )
+                AutoMixLevelBadge(
+                    level = state.planLevel,
+                    modifier = Modifier.padding(start = 6.dp)
+                )
+            }
             Text(
                 text = track.title,
                 style = AppTheme.typography.titleSmall.copy(
@@ -101,6 +113,43 @@ actual fun AutoMixMiniPlayer(modifier: Modifier) {
             modifier = Modifier
                 .size(28.dp)
                 .clickable { manager.togglePlayPause() }
+        )
+    }
+}
+
+@Composable
+internal fun AutoMixLevelBadge(
+    level: AutoMixLevel?,
+    modifier: Modifier = Modifier
+) {
+    if (level == null) return
+    val color = when (level) {
+        AutoMixLevel.Safe -> Color(0xFF1ED760)
+        AutoMixLevel.Mid -> Color(0xFFFFC857)
+        AutoMixLevel.Bold -> Color(0xFFFF6B6B)
+    }
+    val label = stringResource(
+        when (level) {
+            AutoMixLevel.Safe -> Res.string.auto_mix_level_safe
+            AutoMixLevel.Mid -> Res.string.auto_mix_level_mid
+            AutoMixLevel.Bold -> Res.string.auto_mix_level_bold
+        }
+    )
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(color.copy(alpha = 0.14f))
+            .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(3.dp))
+            .padding(horizontal = 5.dp, vertical = 1.dp)
+    ) {
+        Text(
+            text = label,
+            style = AppTheme.typography.labelSmall.copy(
+                fontSize = 7.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.7.sp,
+                color = color
+            )
         )
     }
 }

@@ -55,6 +55,9 @@ object AutoMixQueueSelector {
         score += abs(shift) * 10f
         val targetEnergy = (currentFeatures.energy + 0.04f).coerceIn(0.15f, 0.95f)
         score += abs(targetEnergy - candidateFeatures.energy) * 18f
+        val vibeDistance = currentFeatures.vibe.distance(candidateFeatures.vibe)
+        score += vibeDistance * 70f
+        if (vibeDistance > 0.32f) score += 45f
         val swingDiff = abs(currentFeatures.swingRatio - candidateFeatures.swingRatio)
         if (swingDiff > 0.18f) score += 120f else score += swingDiff * 40f
         if (tempoRatio(currentFeatures.bpm, candidateFeatures.bpm) == null) score += 80f

@@ -190,19 +190,25 @@ actual fun AutoMixDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(SpotifyTokens.Green)
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = "AUTO MIX",
-                        style = AppTheme.typography.labelSmall.copy(
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = SpotifyTokens.Base
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(SpotifyTokens.Green)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "AUTO MIX",
+                            style = AppTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SpotifyTokens.Base
+                            )
                         )
+                    }
+                    AutoMixLevelBadge(
+                        level = state.planLevel,
+                        modifier = Modifier.padding(start = 6.dp)
                     )
                 }
 

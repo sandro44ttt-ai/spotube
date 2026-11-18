@@ -267,6 +267,9 @@
     <string name="auto_mix_style_cut">Cut</string>
     <string name="auto_mix_style_blend">Blend</string>
     <string name="auto_mix_style_mashup">Mashup</string>
+    <string name="auto_mix_level_safe">SAFE</string>
+    <string name="auto_mix_level_mid">MID</string>
+    <string name="auto_mix_level_bold">BOLD</string>
     <string name="auto_mix_notification_text">Automatic mixing is running</string>
     <string name="auto_mix_analyzing">Analyzing BPM and key...</string>
     <string name="settings_playback_port_title">Playback proxy server port</string>

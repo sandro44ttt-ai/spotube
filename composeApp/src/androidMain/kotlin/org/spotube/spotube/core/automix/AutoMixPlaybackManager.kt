@@ -67,7 +67,9 @@ class AutoMixPlaybackManager(
         val lastError: String = "",
         val debugInfo: String = "",
         val transitionKind: TransitionKind = TransitionKind.HardCut,
-        val planReason: String = ""
+        val planReason: String = "",
+        val planLevel: AutoMixLevel? = null,
+        val planVibeDistance: Float = 1f
     )
 
     private val _state = MutableStateFlow(State())
@@ -107,6 +109,8 @@ class AutoMixPlaybackManager(
     private var transitionStyle: TransitionStyle = TransitionStyle.Blend
     private var transitionKind: TransitionKind = TransitionKind.HardCut
     private var planReason: String = ""
+    private var planLevel: AutoMixLevel? = null
+    private var planVibeDistance: Float = 1f
     private var positionMs: Long = 0L
     private var durationMs: Long = 0L
     private var sessionKey: String = ""
@@ -178,6 +182,9 @@ class AutoMixPlaybackManager(
         title = requestedTitle
         sessionKey = key
         lastError = ""
+        planLevel = null
+        planVibeDistance = 1f
+        planReason = ""
         queue.clear()
         features.clear()
         activeSpeed = 1f
@@ -211,6 +218,9 @@ class AutoMixPlaybackManager(
         isStarted = false
         isPlaying = false
         isTransitioning = false
+        planLevel = null
+        planVibeDistance = 1f
+        planReason = ""
         pollJob?.cancel()
         transitionJob?.cancel()
         analysisJob?.cancel()
@@ -265,6 +275,9 @@ class AutoMixPlaybackManager(
         activePitchSemitones = 0
         if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
         lastError = ""
+        planLevel = null
+        planVibeDistance = 1f
+        planReason = ""
         index += 1
         current = target
         positionMs = 0L
@@ -288,6 +301,9 @@ class AutoMixPlaybackManager(
         activePitchSemitones = 0
         if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
         lastError = ""
+        planLevel = null
+        planVibeDistance = 1f
+        planReason = ""
         index = previousIndex
         current = target
         positionMs = 0L
@@ -352,6 +368,8 @@ class AutoMixPlaybackManager(
         transitionKind = plan.kind
         transitionStyle = styleFor(plan.kind)
         planReason = plan.reason
+        planLevel = plan.level
+        planVibeDistance = plan.vibeDistance
         transitionProgress = 0f
         val pitchFactor = 2.0.pow(plan.pitchSemitones / 12.0).toFloat()
         to.playbackParameters = PlaybackParameters(plan.tempoRatio, pitchFactor)
@@ -572,7 +590,9 @@ class AutoMixPlaybackManager(
                 "media=${audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)}/" +
                 "${audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",
             transitionKind = transitionKind,
-            planReason = planReason
+            planReason = planReason,
+            planLevel = planLevel,
+            planVibeDistance = planVibeDistance
         )
     }
 

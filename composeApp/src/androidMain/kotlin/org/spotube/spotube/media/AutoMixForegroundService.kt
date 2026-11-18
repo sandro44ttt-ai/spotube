@@ -183,8 +183,10 @@ class AutoMixForegroundService : Service(), KoinComponent {
         )
         val title = state.current?.title
             ?: runBlocking { getString(Res.string.auto_mix_title) }
-        val text = state.current?.artists?.joinToString(", ") { it.name }
+        val artistText = state.current?.artists?.joinToString(", ") { it.name }
             ?: runBlocking { getString(Res.string.auto_mix_notification_text) }
+        val text = listOfNotNull(artistText, state.planLevel?.name?.uppercase())
+            .joinToString(" · ")
         val playPauseLabel = runBlocking {
             getString(
                 if (state.isPlaying) Res.string.auto_mix_pause else Res.string.auto_mix_play
