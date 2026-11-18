@@ -78,10 +78,14 @@ class AutoMixPlaybackManager(
         .setUsage(C.USAGE_MEDIA)
         .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
         .build()
+    private val dspA = MixDspProcessor()
+    private val dspB = MixDspProcessor()
     private val deckA = ExoPlayer.Builder(context)
+        .setRenderersFactory(AutoMixRenderersFactory(context, dspA))
         .setAudioAttributes(audioAttributes, false)
         .build()
     private val deckB = ExoPlayer.Builder(context)
+        .setRenderersFactory(AutoMixRenderersFactory(context, dspB))
         .setAudioAttributes(audioAttributes, false)
         .build()
 
@@ -174,6 +178,8 @@ class AutoMixPlaybackManager(
         queue.clear()
         features.clear()
         activeSpeed = 1f
+        dspA.resetEffects()
+        dspB.resetEffects()
         val ordered = smartOrder(tracks)
         val startIndex = chooseStartIndex(ordered)
         queue.addAll(ordered.drop(startIndex) + ordered.take(startIndex))
@@ -213,6 +219,8 @@ class AutoMixPlaybackManager(
         deckB.pause()
         deckA.playbackParameters = PlaybackParameters(1f)
         deckB.playbackParameters = PlaybackParameters(1f)
+        dspA.resetEffects()
+        dspB.resetEffects()
         deckA.clearMediaItems()
         deckB.clearMediaItems()
         current = null
@@ -249,6 +257,7 @@ class AutoMixPlaybackManager(
         activePlayer().pause()
         activePlayer().playbackParameters = PlaybackParameters(1f)
         activeSpeed = 1f
+        if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
         lastError = ""
         index += 1
         current = target
@@ -270,6 +279,7 @@ class AutoMixPlaybackManager(
         activePlayer().pause()
         activePlayer().playbackParameters = PlaybackParameters(1f)
         activeSpeed = 1f
+        if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
         lastError = ""
         index = previousIndex
         current = target
@@ -325,6 +335,10 @@ class AutoMixPlaybackManager(
         val plan = currentPlan() ?: return
         val from = activePlayer()
         val to = idlePlayer()
+        val fromDsp = if (activeIsA) dspA else dspB
+        val toDsp = if (activeIsA) dspB else dspA
+        fromDsp.resetEffects()
+        toDsp.resetEffects()
         isTransitioning = true
         transitionKind = plan.kind
         transitionStyle = styleFor(plan.kind)
@@ -349,6 +363,16 @@ class AutoMixPlaybackManager(
                     transitionProgress = t
                     from.volume = sqrt(1f - t)
                     to.volume = sqrt(t)
+                    if (plan.bassSwap) {
+                        toDsp.highPassHz = (140f * (1f - t)).coerceAtLeast(20f)
+                    }
+                    if (plan.kind == TransitionKind.Mashup || plan.kind == TransitionKind.TempoBlend) {
+                        fromDsp.lowPassHz = 20_000f - 14_000f * t * t
+                    }
+                    if (t > 0.72f) {
+                        fromDsp.echoMix = ((t - 0.72f) / 0.28f).coerceIn(0f, 1f) * 0.24f
+                        fromDsp.echoFeedback = 0.2f
+                    }
                     val ramp = (t * 4f).coerceAtMost(1f)
                     val speed = 1f + (plan.tempoRatio - 1f) * ramp
                     to.playbackParameters = PlaybackParameters(speed)
@@ -358,6 +382,8 @@ class AutoMixPlaybackManager(
             }
             loopJob?.cancel()
             loopJob = null
+            fromDsp.resetEffects()
+            toDsp.resetEffects()
             from.pause()
             from.volume = 1f
             to.volume = 1f
