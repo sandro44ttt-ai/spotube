@@ -354,7 +354,6 @@ class StemSeparator(
             }
             if (audioTrack < 0 || sourceFormat == null) return null
             source.selectTrack(audioTrack)
-            source.seekTo(windowStartUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val mime = sourceFormat.getString(MediaFormat.KEY_MIME) ?: return null
             var channelCount = sourceFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                 .coerceAtLeast(1)
@@ -511,7 +510,7 @@ class StemSeparator(
     companion object {
         const val SAMPLE_RATE = 44_100
         const val SEGMENT_SAMPLES = 343_980
-        private const val DECODE_TIMEOUT_MS = 30_000L
+        private const val DECODE_TIMEOUT_MS = 60_000L
         private const val MAX_AUDIO_BYTES = 40L * 1024 * 1024
         private const val MIN_MODEL_BYTES = 300_000_000L
         private const val MODEL_URL =
