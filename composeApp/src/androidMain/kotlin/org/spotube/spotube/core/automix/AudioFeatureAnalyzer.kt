@@ -17,27 +17,24 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-data class AudioFeatures(
-    val bpm: Float,
-    val beatOffsetSeconds: Float,
-    val key: String,
-    val keyRoot: Int,
-    val keyMinor: Boolean,
-    val energy: Float,
-    val mixInFraction: Float,
-    val mixOutFraction: Float
-)
-
-class AudioFeatureAnalyzer {
-    private val cache = ConcurrentHashMap<String, AudioFeatures>()
+class AudioFeatureAnalyzer(
+    private val cache: MixAnalysisCache
+) {
+    private val memory = ConcurrentHashMap<String, AudioFeatures>()
 
     suspend fun analyze(trackId: String, url: String): AudioFeatures? =
         withContext(Dispatchers.IO) {
-            cache[trackId]?.let { return@withContext it }
+            memory[trackId]?.let { return@withContext it }
+            cache.get(trackId)?.let {
+                memory[trackId] = it
+                return@withContext it
+            }
             val samples = decodeMono(url) ?: return@withContext null
             val features = computeFeatures(samples, ANALYSIS_SAMPLE_RATE) ?: return@withContext null
-            cache[trackId] = features
-            features
+            val stamped = features.copy(analyzedAtMs = System.currentTimeMillis())
+            memory[trackId] = stamped
+            cache.put(trackId, stamped)
+            stamped
         }
 
     private fun decodeMono(url: String): FloatArray? {
@@ -194,6 +191,8 @@ class AudioFeatureAnalyzer {
         val previousMagnitude = FloatArray(fftSize / 2)
         val flux = FloatArray(frameCount)
         val chroma = DoubleArray(12)
+        var midBandMagnitude = 0.0
+        var totalMagnitude = 0.0
 
         for (frame in 0 until frameCount) {
             val offset = frame * hop
@@ -210,6 +209,8 @@ class AudioFeatureAnalyzer {
                 if (difference > 0f) flux[frame] += difference
                 previousMagnitude[bin] = magnitude
                 val frequency = bin.toFloat() * sampleRate / fftSize
+                totalMagnitude += magnitude
+                if (frequency in 300f..3000f) midBandMagnitude += magnitude
                 if (frequency in 80f..2000f) {
                     val midi = 69.0 + 12.0 * ln(frequency / 440.0) / ln(2.0)
                     val pitchClass = ((midi.roundToInt() % 12) + 12) % 12
@@ -313,17 +314,31 @@ class AudioFeatureAnalyzer {
             }
         }
         val totalSeconds = samples.size.toFloat() / sampleRate
-        val mixInFraction = ((peakIndex * segmentSeconds) / totalSeconds)
-            .coerceIn(0.18f, 0.45f)
+        val introEnd = (segmentEnergy.indexOfFirst { it >= peakEnergy * 0.5f }
+            .takeIf { it >= 0 } ?: 0
+            ).let { index ->
+            ((index * segmentSeconds) / totalSeconds).coerceIn(0.03f, 0.25f)
+        }
+        val dropFraction = ((peakIndex * segmentSeconds) / totalSeconds)
+            .coerceIn(0.12f, 0.6f)
         var lastHigh = segmentCount - 1
         for (segment in segmentCount - 1 downTo 0) {
-            if (segmentEnergy[segment] >= peakEnergy * 0.55f) {
+            if (segmentEnergy[segment] >= peakEnergy * 0.6f) {
                 lastHigh = segment
                 break
             }
         }
-        val mixOutFraction = (((lastHigh + 1) * segmentSeconds) / totalSeconds)
-            .coerceIn(0.65f, 0.9f)
+        val outroStart = (((lastHigh + 1) * segmentSeconds) / totalSeconds)
+            .coerceIn(0.65f, 0.94f)
+        val mixOutFraction = (outroStart - 0.01f).coerceIn(0.6f, 0.93f)
+        val mixInFraction = if (dropFraction > 0.16f) {
+            dropFraction
+        } else {
+            introEnd
+        }
+        val vocalness = (midBandMagnitude / totalMagnitude.coerceAtLeast(1e-9))
+            .toFloat()
+            .coerceIn(0f, 1f)
 
         return AudioFeatures(
             bpm = bpm,
@@ -333,7 +348,13 @@ class AudioFeatureAnalyzer {
             keyMinor = keyResult.minor,
             energy = energy,
             mixInFraction = mixInFraction,
-            mixOutFraction = mixOutFraction
+            mixOutFraction = mixOutFraction,
+            introEndFraction = introEnd,
+            outroStartFraction = outroStart,
+            dropFraction = dropFraction,
+            vocalness = vocalness,
+            confidence = 0.65f,
+            durationSeconds = totalSeconds
         )
     }
 
@@ -425,7 +446,7 @@ class AudioFeatureAnalyzer {
 
     companion object {
         private const val ANALYSIS_SAMPLE_RATE = 11_025
-        private const val MAX_ANALYSIS_SECONDS = 75L
+        private const val MAX_ANALYSIS_SECONDS = 360L
 
         private val MAJOR_PROFILE = doubleArrayOf(
             6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88

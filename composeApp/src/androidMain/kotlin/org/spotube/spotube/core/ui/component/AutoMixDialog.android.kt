@@ -256,6 +256,17 @@ actual fun AutoMixDialog(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                if (state.planReason.isNotBlank()) {
+                    Text(
+                        text = state.planReason,
+                        style = AppTheme.typography.labelSmall.copy(
+                            fontSize = 8.sp,
+                            color = SpotifyTokens.Muted.copy(alpha = 0.6f)
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 

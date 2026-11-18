@@ -21,13 +21,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.spotube.plugin_interfaces.plugin_apis.metadata.track.MetadataTrack
+import org.spotube.plugin_interfaces.plugin_apis.audio.StreamProtocol
+import org.spotube.spotube.core.server.StreamRequest
 import org.spotube.spotube.core.server.StreamTrackRegistry
+import org.spotube.spotube.core.server.StreamingUrlRepository
 import org.spotube.spotube.media.AutoMixForegroundService
 import org.spotube.spotube.modules.plugin.PluginProvider
 import org.spotube.spotube.modules.settings.SettingsProvider
-import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -37,7 +40,8 @@ class AutoMixPlaybackManager(
     private val context: Context,
     private val settingsProvider: SettingsProvider,
     private val pluginProvider: PluginProvider,
-    private val analyzer: AudioFeatureAnalyzer
+    private val analyzer: AudioFeatureAnalyzer,
+    private val streamingUrlRepository: StreamingUrlRepository
 ) {
     enum class TransitionStyle { Cut, Blend, Mashup }
 
@@ -59,7 +63,9 @@ class AutoMixPlaybackManager(
         val isAnalyzing: Boolean = false,
         val playbackState: Int = Player.STATE_IDLE,
         val lastError: String = "",
-        val debugInfo: String = ""
+        val debugInfo: String = "",
+        val transitionKind: TransitionKind = TransitionKind.HardCut,
+        val planReason: String = ""
     )
 
     private val _state = MutableStateFlow(State())
@@ -93,17 +99,20 @@ class AutoMixPlaybackManager(
     private var isTransitioning: Boolean = false
     private var transitionProgress: Float = 0f
     private var transitionStyle: TransitionStyle = TransitionStyle.Blend
+    private var transitionKind: TransitionKind = TransitionKind.HardCut
+    private var planReason: String = ""
     private var positionMs: Long = 0L
     private var durationMs: Long = 0L
     private var sessionKey: String = ""
     private var title: String = ""
     private var pollJob: Job? = null
     private var transitionJob: Job? = null
+    private var loopJob: Job? = null
     private var analysisJob: Job? = null
     private val features = mutableMapOf<String, AudioFeatures>()
     private var activeSpeed: Float = 1f
     private var lastStartTrackId: String? = null
-    private val localAnalysisEnabled = false
+    private val localAnalysisEnabled = true
     private var lastError: String = ""
 
     init {
@@ -195,9 +204,11 @@ class AutoMixPlaybackManager(
         pollJob?.cancel()
         transitionJob?.cancel()
         analysisJob?.cancel()
+        loopJob?.cancel()
         pollJob = null
         transitionJob = null
         analysisJob = null
+        loopJob = null
         deckA.pause()
         deckB.pause()
         deckA.playbackParameters = PlaybackParameters(1f)
@@ -289,12 +300,14 @@ class AutoMixPlaybackManager(
                         player.play()
                     }
                 }
-                val plan = planTransition(current, next)
-                val triggerAt = transitionTriggerAt(plan, durationMs)
+                val plan = currentPlan()
+                val triggerAt = plan?.let { transitionTriggerAt(it, durationMs) }
+                    ?: Long.MAX_VALUE
                 if (
                     isPlaying &&
                     !isTransitioning &&
                     next != null &&
+                    plan != null &&
                     durationMs > 0L &&
                     positionMs >= triggerAt
                 ) {
@@ -309,33 +322,47 @@ class AutoMixPlaybackManager(
     private fun startTransition() {
         if (isTransitioning) return
         val target = next ?: return
-        val plan = planTransition(current, target)
+        val plan = currentPlan() ?: return
         val from = activePlayer()
         val to = idlePlayer()
         isTransitioning = true
-        transitionStyle = plan.style
+        transitionKind = plan.kind
+        transitionStyle = styleFor(plan.kind)
+        planReason = plan.reason
         transitionProgress = 0f
-        val targetDuration = to.duration.takeIf { it > 0L } ?: target.durationMs
-        val startAt = alignedStartMs(target, plan, targetDuration)
-        to.playbackParameters = PlaybackParameters(plan.speed)
-        to.seekTo(startAt)
+        to.playbackParameters = PlaybackParameters(plan.tempoRatio)
+        to.seekTo(plan.incomingCueMs)
         to.volume = 0f
         to.play()
+        plan.loopIn?.let { startLoop(to, it) }
         transitionJob = scope.launch {
-            val steps = (plan.durationMs / 100L).toInt().coerceAtLeast(1)
-            for (step in 1..steps) {
-                val t = step.toFloat() / steps.toFloat()
-                transitionProgress = t
-                from.volume = sqrt(1f - t)
-                to.volume = sqrt(t)
-                publish()
-                delay(100)
+            if (plan.hardCut) {
+                delay(40)
+                from.volume = 0f
+                from.pause()
+                to.volume = 1f
+                transitionProgress = 1f
+            } else {
+                val steps = (plan.durationMs / 50L).toInt().coerceAtLeast(1)
+                for (step in 1..steps) {
+                    val t = step.toFloat() / steps.toFloat()
+                    transitionProgress = t
+                    from.volume = sqrt(1f - t)
+                    to.volume = sqrt(t)
+                    val ramp = (t * 4f).coerceAtMost(1f)
+                    val speed = 1f + (plan.tempoRatio - 1f) * ramp
+                    to.playbackParameters = PlaybackParameters(speed)
+                    if (step % 2 == 0 || step == steps) publish()
+                    delay(50)
+                }
             }
+            loopJob?.cancel()
+            loopJob = null
             from.pause()
             from.volume = 1f
             to.volume = 1f
             activeIsA = !activeIsA
-            activeSpeed = plan.speed
+            activeSpeed = plan.tempoRatio
             index += 1
             current = target
             positionMs = 0L
@@ -346,6 +373,26 @@ class AutoMixPlaybackManager(
             ensureAnalysis()
             publish()
         }
+    }
+
+    private fun startLoop(player: ExoPlayer, spec: LoopSpec) {
+        loopJob?.cancel()
+        loopJob = scope.launch {
+            var loops = 0
+            while (isActive && loops < 2) {
+                if (player.currentPosition >= spec.endMs - 60L) {
+                    player.seekTo(spec.startMs)
+                    loops++
+                }
+                delay(20)
+            }
+        }
+    }
+
+    private fun styleFor(kind: TransitionKind): TransitionStyle = when (kind) {
+        TransitionKind.HardCut -> TransitionStyle.Cut
+        TransitionKind.Mashup -> TransitionStyle.Mashup
+        else -> TransitionStyle.Blend
     }
 
     private fun preloadNext() {
@@ -452,7 +499,9 @@ class AutoMixPlaybackManager(
                 "vol=${(player.volume * 100).roundToInt()}% session=$session " +
                 "buffered=${player.bufferedPosition} " +
                 "media=${audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)}/" +
-                "${audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}"
+                "${audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",
+            transitionKind = transitionKind,
+            planReason = planReason
         )
     }
 
@@ -481,99 +530,15 @@ class AutoMixPlaybackManager(
         return ordered
     }
 
-    private data class TransitionPlan(
-        val style: TransitionStyle,
-        val durationMs: Long,
-        val mixOutFraction: Float,
-        val mixInFraction: Float,
-        val speed: Float = 1f,
-        val beatMatched: Boolean = false
-    )
-
-    private fun planTransition(
-        current: MetadataTrack?,
-        next: MetadataTrack?
-    ): TransitionPlan {
-        val hash = (((current?.id ?: "") + (next?.id ?: "")).hashCode() and 0x7FFFFFFF)
-        val variation = (hash / 10) % 4
-        val currentFeatures = current?.let { features[it.id] }
-        val nextFeatures = next?.let { features[it.id] }
-        val bothLong = (current?.durationMs ?: 0L) > 60_000L &&
-            (next?.durationMs ?: 0L) > 60_000L
-
-        if (
-            currentFeatures != null &&
-            nextFeatures != null &&
-            currentFeatures.bpm > 0f &&
-            nextFeatures.bpm > 0f
-        ) {
-            val effectiveBpm = currentFeatures.bpm * activeSpeed
-            val ratio = effectiveBpm / nextFeatures.bpm
-            val beatMatched = ratio in 0.92f..1.08f
-            val speed = if (beatMatched) ratio.coerceIn(0.92f, 1.08f) else 1f
-            val keyDistance = keyDistance(currentFeatures.key, nextFeatures.key)
-            val energyDistance = abs(currentFeatures.energy - nextFeatures.energy)
-            val compatibleMashup = bothLong &&
-                beatMatched &&
-                keyDistance <= 1 &&
-                energyDistance < 0.5f
-
-            if (compatibleMashup && hash % 10 < 8) {
-                val beats = if (hash % 2 == 0) 32 else 48
-                val duration = (beats * 60_000f / effectiveBpm)
-                    .coerceIn(12_000f, 24_000f)
-                return TransitionPlan(
-                    style = TransitionStyle.Mashup,
-                    durationMs = duration.toLong(),
-                    mixOutFraction = currentFeatures.mixOutFraction,
-                    mixInFraction = nextFeatures.mixInFraction,
-                    speed = speed,
-                    beatMatched = true
-                )
-            }
-            if (beatMatched && hash % 3 == 0) {
-                val duration = (16 * 60_000f / effectiveBpm)
-                    .coerceIn(6_000f, 12_000f)
-                return TransitionPlan(
-                    style = TransitionStyle.Blend,
-                    durationMs = duration.toLong(),
-                    mixOutFraction = currentFeatures.mixOutFraction,
-                    mixInFraction = nextFeatures.mixInFraction,
-                    speed = speed,
-                    beatMatched = true
-                )
-            }
-            return TransitionPlan(
-                style = TransitionStyle.Cut,
-                durationMs = 1_200L + variation * 200L,
-                mixOutFraction = currentFeatures.mixOutFraction,
-                mixInFraction = nextFeatures.mixInFraction,
-                speed = if (beatMatched) speed else 1f,
-                beatMatched = beatMatched
-            )
-        }
-
-        if (bothLong && hash % 10 < 6) {
-            return TransitionPlan(
-                style = TransitionStyle.Mashup,
-                durationMs = 16_000L + variation * 2_000L,
-                mixOutFraction = 0.60f + variation * 0.03f,
-                mixInFraction = 0.32f + variation * 0.04f
-            )
-        }
-        if (hash % 2 == 0) {
-            return TransitionPlan(
-                style = TransitionStyle.Cut,
-                durationMs = 1_200L + variation * 200L,
-                mixOutFraction = 0.78f + variation * 0.02f,
-                mixInFraction = 0.22f + variation * 0.03f
-            )
-        }
-        return TransitionPlan(
-            style = TransitionStyle.Blend,
-            durationMs = 6_000L + variation * 1_000L,
-            mixOutFraction = 0.82f + variation * 0.02f,
-            mixInFraction = 0.16f + variation * 0.03f
+    private fun currentPlan(): TransitionPlan? {
+        val currentTrack = current ?: return null
+        val nextTrack = next ?: return null
+        return AutoMixPlanner.plan(
+            current = currentTrack,
+            next = nextTrack,
+            currentFeatures = features[currentTrack.id],
+            nextFeatures = features[nextTrack.id],
+            activeTempo = activeSpeed
         )
     }
 
@@ -581,70 +546,31 @@ class AutoMixPlaybackManager(
         if (durationMs <= 20_000L) {
             return (durationMs - 6_000L).coerceAtLeast(0L)
         }
-        val targetSeconds = durationMs / 1000f * plan.mixOutFraction
-        val currentFeatures = current?.let { features[it.id] }
-        if (currentFeatures == null || currentFeatures.bpm <= 0f) {
-            return (targetSeconds * 1000f).toLong().coerceIn(0L, durationMs - 500L)
-        }
-        val beatSeconds = 60f / currentFeatures.bpm
-        val barSeconds = beatSeconds * 4f
-        val offset = currentFeatures.beatOffsetSeconds.coerceIn(0f, beatSeconds)
-        val bars = ((targetSeconds - offset) / barSeconds).roundToInt()
-        val aligned = offset + bars * barSeconds
-        return (aligned * 1000f).toLong().coerceIn(0L, durationMs - 500L)
+        return plan.outgoingCueMs.coerceIn(0L, durationMs - 500L)
     }
 
-    private fun alignedStartMs(
-        track: MetadataTrack,
-        plan: TransitionPlan,
-        durationMs: Long
-    ): Long {
-        if (durationMs <= 0L) return 0L
-        val targetSeconds = durationMs / 1000f * plan.mixInFraction
-        val trackFeatures = features[track.id]
-        if (trackFeatures == null || trackFeatures.bpm <= 0f) {
-            return (targetSeconds * 1000f).toLong().coerceIn(0L, durationMs - 1_000L)
-        }
-        val beatSeconds = 60f / trackFeatures.bpm
-        val barSeconds = beatSeconds * 4f
-        val offset = trackFeatures.beatOffsetSeconds.coerceIn(0f, beatSeconds)
-        val bars = ((targetSeconds - offset) / barSeconds).roundToInt()
-        val aligned = offset + bars * barSeconds
-        return (aligned * 1000f).toLong().coerceIn(0L, durationMs - 1_000L)
-    }
-
-    private fun keyDistance(first: String, second: String): Int {
-        if (first.isBlank() || second.isBlank()) return 2
-        val firstNumber = first.dropLast(1).toIntOrNull() ?: return 2
-        val secondNumber = second.dropLast(1).toIntOrNull() ?: return 2
-        val firstMode = first.last()
-        val secondMode = second.last()
-        if (firstMode == secondMode) {
-            val difference = abs(firstNumber - secondNumber)
-            return min(difference, 12 - difference)
-        }
-        return if (firstNumber == secondNumber) 0 else 2
-    }
-
-    private fun transitionCost(reference: AudioFeatures, candidate: AudioFeatures?): Float {
-        if (candidate == null) return 500f
-        val bpmDifference = abs(reference.bpm - candidate.bpm) /
-            reference.bpm.coerceAtLeast(1f)
-        return bpmDifference * 20f +
-            keyDistance(reference.key, candidate.key) +
-            abs(reference.energy - candidate.energy)
-    }
 
     private fun refineQueue() {
         if (!isStarted || isTransitioning) return
-        val currentFeatures = current?.let { features[it.id] } ?: return
+        val currentTrack = current ?: return
+        val currentFeatures = features[currentTrack.id] ?: return
         val start = index + 1
         if (start >= queue.size) return
-        val end = min(queue.size, start + 5)
-        val window = queue.subList(start, end).toMutableList()
-        window.sortWith(compareBy { transitionCost(currentFeatures, features[it.id]) })
-        for (offset in window.indices) {
-            queue[start + offset] = window[offset]
+        val end = min(queue.size, start + 6)
+        val window = queue.subList(start, end).toList()
+        val recent = queue.subList(
+            maxOf(0, index - 4),
+            index + 1
+        ).map { it.id }.toSet()
+        val ordered = AutoMixQueueSelector.orderUpcoming(
+            current = currentTrack,
+            currentFeatures = currentFeatures,
+            candidates = window,
+            features = features,
+            recentTrackIds = recent
+        )
+        for (offset in ordered.indices) {
+            queue[start + offset] = ordered[offset]
         }
         val newNext = queue.getOrNull(start)
         if (newNext?.id != next?.id) {
@@ -659,25 +585,33 @@ class AutoMixPlaybackManager(
         if (!isStarted || analysisJob?.isActive == true) return
         analysisJob = scope.launch {
             try {
-                val port = settingsProvider.settingsState.value?.playbackProxyServerPort
-                    ?: 14769
+                val settings = settingsProvider.settingsState.value ?: return@launch
+                val request = StreamRequest(
+                    format = settings.streamingMusicFormat,
+                    quality = settings.streamingMusicQuality,
+                    progressiveOnly = true
+                )
                 while (isStarted) {
                     val candidates = buildList {
-                        current?.let { add(it) }
-                        val end = min(queue.lastIndex, index + 2)
+                        val end = min(queue.lastIndex, index + 6)
                         for (position in index + 1..end) {
                             queue.getOrNull(position)?.let { add(it) }
                         }
+                        current?.let { add(it) }
                     }.distinctBy { it.id }
                         .filter { !features.containsKey(it.id) }
                     if (candidates.isEmpty()) break
                     var analyzedAny = false
                     for (track in candidates) {
                         if (!isStarted) break
-                        val result = analyzer.analyze(
-                            track.id,
-                            "http://127.0.0.1:$port/stream/${track.id}"
-                        ) ?: continue
+                        val info = streamingUrlRepository.resolveStreamInfo(
+                            track = track,
+                            request = request
+                        )
+                        if (info == null || info.protocol != StreamProtocol.PROGRESSIVE) {
+                            continue
+                        }
+                        val result = analyzer.analyze(track.id, info.url) ?: continue
                         features[track.id] = result
                         analyzedAny = true
                         refineQueue()
