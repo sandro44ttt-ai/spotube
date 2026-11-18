@@ -25,7 +25,7 @@ class AutoMixPlannerTest {
     }
 
     @Test
-    fun incompatibleTracksUseHardCut() {
+    fun incompatibleTracksUseSafeBlend() {
         val current = track("a", 180_000L, "artist-a")
         val next = track("b", 180_000L, "artist-b")
         val plan = AutoMixPlanner.plan(
@@ -35,8 +35,8 @@ class AutoMixPlannerTest {
             features(155f, "3B", energy = 0.6f)
         )
 
-        assertEquals(TransitionKind.HardCut, plan.kind)
-        assertTrue(plan.hardCut)
+        assertEquals(TransitionKind.SafeBlend, plan.kind)
+        assertEquals(false, plan.hardCut)
         assertEquals(1f, plan.tempoRatio)
     }
 
@@ -75,7 +75,8 @@ class AutoMixPlannerTest {
         dropFraction = 0.25f,
         outroStartFraction = 0.8f,
         vocalness = 0.4f,
-        confidence = 0.7f
+        confidence = 0.7f,
+        analysisComplete = true
     )
 
     private fun track(id: String, durationMs: Long, artistId: String) = MetadataTrack(

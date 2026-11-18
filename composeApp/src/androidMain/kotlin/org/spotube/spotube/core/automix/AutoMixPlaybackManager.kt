@@ -32,6 +32,7 @@ import org.spotube.spotube.media.AutoMixForegroundService
 import org.spotube.spotube.modules.plugin.PluginProvider
 import org.spotube.spotube.modules.settings.SettingsProvider
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -115,6 +116,7 @@ class AutoMixPlaybackManager(
     private var analysisJob: Job? = null
     private val features = mutableMapOf<String, AudioFeatures>()
     private var activeSpeed: Float = 1f
+    private var activePitchSemitones: Int = 0
     private var lastStartTrackId: String? = null
     private val localAnalysisEnabled = true
     private var lastError: String = ""
@@ -178,6 +180,7 @@ class AutoMixPlaybackManager(
         queue.clear()
         features.clear()
         activeSpeed = 1f
+        activePitchSemitones = 0
         dspA.resetEffects()
         dspB.resetEffects()
         val ordered = smartOrder(tracks)
@@ -229,6 +232,7 @@ class AutoMixPlaybackManager(
         queue.clear()
         features.clear()
         activeSpeed = 1f
+        activePitchSemitones = 0
         abandonFocus()
         AutoMixForegroundService.stop(context)
         publish()
@@ -257,6 +261,7 @@ class AutoMixPlaybackManager(
         activePlayer().pause()
         activePlayer().playbackParameters = PlaybackParameters(1f)
         activeSpeed = 1f
+        activePitchSemitones = 0
         if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
         lastError = ""
         index += 1
@@ -279,6 +284,7 @@ class AutoMixPlaybackManager(
         activePlayer().pause()
         activePlayer().playbackParameters = PlaybackParameters(1f)
         activeSpeed = 1f
+        activePitchSemitones = 0
         if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
         lastError = ""
         index = previousIndex
@@ -344,41 +350,42 @@ class AutoMixPlaybackManager(
         transitionStyle = styleFor(plan.kind)
         planReason = plan.reason
         transitionProgress = 0f
-        to.playbackParameters = PlaybackParameters(plan.tempoRatio)
-        to.seekTo(plan.incomingCueMs)
+        val pitchFactor = 2.0.pow(plan.pitchSemitones / 12.0).toFloat()
+        to.playbackParameters = PlaybackParameters(plan.tempoRatio, pitchFactor)
+        to.seekTo((plan.incomingCueMs + plan.incomingOffsetMs).coerceAtLeast(0L))
         to.volume = 0f
         to.play()
         plan.loopIn?.let { startLoop(to, it) }
+        val ownerDsp = if (plan.bassOwnerIsA) dspA else dspB
+        val secondaryDsp = if (plan.bassOwnerIsA) dspB else dspA
+        ownerDsp.highPassHz = 20f
+        ownerDsp.midDipDb = plan.midDipDb
+        ownerDsp.centerAttenuationDb = plan.centerAttenuationDb
+        secondaryDsp.highPassHz = plan.secondaryHighPassHz
+        secondaryDsp.midDipDb = 0f
+        secondaryDsp.centerAttenuationDb = 0f
+        val headroomGain = 10.0.pow(plan.headroomDb / 20.0).toFloat()
+        fromDsp.gain = headroomGain
+        toDsp.gain = headroomGain
         transitionJob = scope.launch {
-            if (plan.hardCut) {
-                delay(40)
-                from.volume = 0f
-                from.pause()
-                to.volume = 1f
-                transitionProgress = 1f
-            } else {
-                val steps = (plan.durationMs / 50L).toInt().coerceAtLeast(1)
-                for (step in 1..steps) {
-                    val t = step.toFloat() / steps.toFloat()
-                    transitionProgress = t
-                    from.volume = sqrt(1f - t)
-                    to.volume = sqrt(t)
-                    if (plan.bassSwap) {
-                        toDsp.highPassHz = (140f * (1f - t)).coerceAtLeast(20f)
-                    }
-                    if (plan.kind == TransitionKind.Mashup || plan.kind == TransitionKind.TempoBlend) {
-                        fromDsp.lowPassHz = 20_000f - 14_000f * t * t
-                    }
-                    if (t > 0.72f) {
-                        fromDsp.echoMix = ((t - 0.72f) / 0.28f).coerceIn(0f, 1f) * 0.24f
-                        fromDsp.echoFeedback = 0.2f
-                    }
-                    val ramp = (t * 4f).coerceAtMost(1f)
-                    val speed = 1f + (plan.tempoRatio - 1f) * ramp
-                    to.playbackParameters = PlaybackParameters(speed)
-                    if (step % 2 == 0 || step == steps) publish()
-                    delay(50)
+            val steps = (plan.durationMs / 50L).toInt().coerceAtLeast(1)
+            for (step in 1..steps) {
+                val t = step.toFloat() / steps.toFloat()
+                transitionProgress = t
+                from.volume = sqrt(1f - t)
+                to.volume = sqrt(t)
+                if (plan.kind == TransitionKind.SafeBlend) {
+                    secondaryDsp.lowPassHz = 20_000f - 12_000f * t * t
                 }
+                if (t > 0.72f) {
+                    fromDsp.echoMix = ((t - 0.72f) / 0.28f).coerceIn(0f, 1f) * 0.2f
+                    fromDsp.echoFeedback = 0.18f
+                }
+                val ramp = (t * 4f).coerceAtMost(1f)
+                val speed = 1f + (plan.tempoRatio - 1f) * ramp
+                to.playbackParameters = PlaybackParameters(speed, pitchFactor)
+                if (step % 2 == 0 || step == steps) publish()
+                delay(50)
             }
             loopJob?.cancel()
             loopJob = null
@@ -389,6 +396,7 @@ class AutoMixPlaybackManager(
             to.volume = 1f
             activeIsA = !activeIsA
             activeSpeed = plan.tempoRatio
+            activePitchSemitones = plan.pitchSemitones
             index += 1
             current = target
             positionMs = 0L
@@ -564,7 +572,8 @@ class AutoMixPlaybackManager(
             next = nextTrack,
             currentFeatures = features[currentTrack.id],
             nextFeatures = features[nextTrack.id],
-            activeTempo = activeSpeed
+            activeTempo = activeSpeed,
+            currentPitchSemitones = activePitchSemitones
         )
     }
 
@@ -582,10 +591,9 @@ class AutoMixPlaybackManager(
         val currentFeatures = features[currentTrack.id] ?: return
         val start = index + 1
         if (start >= queue.size) return
-        val end = min(queue.size, start + 6)
-        val window = queue.subList(start, end).toList()
+        val window = queue.subList(start, queue.size).toList()
         val recent = queue.subList(
-            maxOf(0, index - 4),
+            maxOf(0, index - 8),
             index + 1
         ).map { it.id }.toSet()
         val ordered = AutoMixQueueSelector.orderUpcoming(
@@ -593,7 +601,8 @@ class AutoMixPlaybackManager(
             currentFeatures = currentFeatures,
             candidates = window,
             features = features,
-            recentTrackIds = recent
+            recentTrackIds = recent,
+            currentPitchSemitones = activePitchSemitones
         )
         for (offset in ordered.indices) {
             queue[start + offset] = ordered[offset]
@@ -617,33 +626,50 @@ class AutoMixPlaybackManager(
                     quality = settings.streamingMusicQuality,
                     progressiveOnly = true
                 )
+                val attemptedFull = mutableSetOf<String>()
+                val attemptedLight = mutableSetOf<String>()
                 while (isStarted) {
-                    val candidates = buildList {
+                    val lookaheadEnd = min(queue.lastIndex, index + 8)
+                    val fullCandidates = buildList {
                         current?.let { add(it) }
-                        val end = min(queue.lastIndex, index + 6)
-                        for (position in index + 1..end) {
+                        for (position in index + 1..lookaheadEnd) {
                             queue.getOrNull(position)?.let { add(it) }
                         }
                     }.distinctBy { it.id }
-                        .filter { !features.containsKey(it.id) }
-                    if (candidates.isEmpty()) break
-                    var analyzedAny = false
-                    for (track in candidates) {
-                        if (!isStarted) break
-                        val info = streamingUrlRepository.resolveStreamInfo(
-                            track = track,
-                            request = request
-                        )
-                        if (info == null || info.protocol != StreamProtocol.PROGRESSIVE) {
-                            continue
+                        .filter {
+                            it.id !in attemptedFull &&
+                                features[it.id]?.analysisComplete != true
                         }
-                        val result = analyzer.analyze(track.id, info.url) ?: continue
-                        features[track.id] = result
-                        analyzedAny = true
-                        refineQueue()
-                        publish()
+                    val lightCandidates = if (fullCandidates.isEmpty()) {
+                        queue.drop(index + 1).filter {
+                            it.id !in features &&
+                                it.id !in attemptedLight &&
+                                it.id !in attemptedFull
+                        }
+                    } else {
+                        emptyList()
                     }
-                    if (!analyzedAny) break
+                    val track = fullCandidates.firstOrNull()
+                        ?: lightCandidates.firstOrNull()
+                        ?: break
+                    val fullTrack = fullCandidates.isNotEmpty()
+                    if (fullTrack) {
+                        attemptedFull += track.id
+                    } else {
+                        attemptedLight += track.id
+                    }
+                    if (!isStarted) break
+                    val info = streamingUrlRepository.resolveStreamInfo(
+                        track = track,
+                        request = request
+                    )
+                    if (info == null || info.protocol != StreamProtocol.PROGRESSIVE) {
+                        continue
+                    }
+                    val result = analyzer.analyze(track.id, info.url, fullTrack) ?: continue
+                    features[track.id] = result
+                    refineQueue()
+                    publish()
                 }
             } catch (e: CancellationException) {
                 throw e

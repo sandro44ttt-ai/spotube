@@ -8,6 +8,7 @@ import kotlin.math.roundToInt
 
 enum class TransitionKind {
     HardCut,
+    SafeBlend,
     BeatBlend,
     TempoBlend,
     BassSwap,
@@ -27,11 +28,18 @@ data class TransitionPlan(
     val incomingCueMs: Long,
     val durationMs: Long,
     val tempoRatio: Float,
-    val hardCut: Boolean,
-    val bassSwap: Boolean,
-    val loopIn: LoopSpec?,
-    val bars: Int,
-    val reason: String
+    val pitchSemitones: Int = 0,
+    val hardCut: Boolean = false,
+    val bassSwap: Boolean = false,
+    val bassOwnerIsA: Boolean = true,
+    val secondaryHighPassHz: Float = 140f,
+    val midDipDb: Float = 0f,
+    val centerAttenuationDb: Float = 0f,
+    val headroomDb: Float = -6f,
+    val incomingOffsetMs: Long = 0L,
+    val loopIn: LoopSpec? = null,
+    val bars: Int = 8,
+    val reason: String = ""
 )
 
 object AutoMixPlanner {
@@ -40,7 +48,8 @@ object AutoMixPlanner {
         next: MetadataTrack,
         currentFeatures: AudioFeatures?,
         nextFeatures: AudioFeatures?,
-        activeTempo: Float = 1f
+        activeTempo: Float = 1f,
+        currentPitchSemitones: Int = 0
     ): TransitionPlan {
         val currentBpm = currentFeatures?.bpm?.times(activeTempo) ?: 0f
         val nextBpm = nextFeatures?.bpm ?: 0f
@@ -51,62 +60,104 @@ object AutoMixPlanner {
         val seed = (((current.id + next.id).hashCode() and 0x7FFFFFFF) / 10) % 4
 
         val outgoingCue = outgoingCueMs(currentDuration, currentFeatures, barMs)
-        val incomingCue = incomingCueMs(nextDuration, nextFeatures, barMs)
+        val nextBarMs = if (nextBpm > 0f) 60_000f / nextBpm * 4f else barMs
+        val incomingCue = incomingCueMs(nextDuration, nextFeatures, nextBarMs)
         val tempoRatio = AutoMixQueueSelector.tempoRatio(currentBpm, nextBpm)
-        val keyDistance = AutoMixQueueSelector.keyDistance(
-            currentFeatures?.key.orEmpty(),
-            nextFeatures?.key.orEmpty()
-        )
+        val pitchShift = if (currentFeatures != null && nextFeatures != null) {
+            AutoMixQueueSelector.pitchShiftFor(
+                currentFeatures,
+                currentPitchSemitones,
+                nextFeatures
+            )
+        } else {
+            null
+        }
+        val currentKey = if (currentFeatures != null) {
+            AutoMixQueueSelector.camelotFor(
+                currentFeatures.keyRoot + currentPitchSemitones,
+                currentFeatures.keyMinor
+            )
+        } else {
+            ""
+        }
+        val nextKey = if (nextFeatures != null) {
+            AutoMixQueueSelector.camelotFor(
+                nextFeatures.keyRoot + (pitchShift ?: 0),
+                nextFeatures.keyMinor
+            )
+        } else {
+            ""
+        }
+        val keyDistance = AutoMixQueueSelector.keyDistance(currentKey, nextKey)
         val energyDistance = if (currentFeatures != null && nextFeatures != null) {
             abs(currentFeatures.energy - nextFeatures.energy)
         } else {
             1f
         }
-        val vocalLoad = (currentFeatures?.vocalness ?: 0.5f) +
-            (nextFeatures?.vocalness ?: 0.5f)
-
+        val vocalA = currentFeatures?.vocalness ?: 0.5f
+        val vocalB = nextFeatures?.vocalness ?: 0.5f
+        val swingDiff = if (currentFeatures != null && nextFeatures != null) {
+            abs(currentFeatures.swingRatio - nextFeatures.swingRatio)
+        } else {
+            1f
+        }
         val bothLong = current.durationMs > 60_000L && next.durationMs > 60_000L
+        val fullFeatures = currentFeatures?.analysisComplete == true &&
+            nextFeatures?.analysisComplete == true
+        val vocalConflict = vocalA > 0.65f && vocalB > 0.65f
         val canMashup = bothLong &&
+            fullFeatures &&
             tempoRatio != null &&
+            pitchShift != null &&
             keyDistance <= 1 &&
-            energyDistance < 0.5f &&
-            vocalLoad < 1.25f
+            swingDiff <= 0.18f &&
+            energyDistance < 0.45f &&
+            !vocalConflict
+
         if (canMashup) {
-            val bars = if (seed % 2 == 0) 24 else 32
-            val duration = (bars * barMs).coerceIn(12_000f, 30_000f)
+            val bars = if (seed % 3 == 0) 16 else 8
+            val duration = (bars * barMs).coerceIn(16_000f, 36_000f)
+            val ownerIsA = vocalA < vocalB
             return TransitionPlan(
                 kind = TransitionKind.Mashup,
                 outgoingCueMs = outgoingCue,
                 incomingCueMs = incomingCue,
                 durationMs = duration.toLong(),
                 tempoRatio = tempoRatio ?: 1f,
-                hardCut = false,
+                pitchSemitones = pitchShift ?: 0,
                 bassSwap = true,
-                loopIn = null,
+                bassOwnerIsA = ownerIsA,
+                secondaryHighPassHz = 140f,
+                midDipDb = 4.5f,
+                centerAttenuationDb = 3.5f,
+                headroomDb = -6f,
+                incomingOffsetMs = transientOffsetMs(
+                    currentFeatures,
+                    nextFeatures
+                ),
                 bars = bars,
-                reason = "mashup: ${currentBpm.roundToInt()}→${nextBpm.roundToInt()} BPM, " +
-                    "$keyDistance key, vocal $vocalLoad"
+                reason = "mashup ${bars}b: ${currentBpm.roundToInt()}→${nextBpm.roundToInt()} BPM, " +
+                    "pitch ${pitchShift ?: 0}, key $keyDistance, " +
+                    "bass ${if (ownerIsA) "A" else "B"}, swing ${(swingDiff * 100).roundToInt()}%"
             )
         }
 
-        val canBlend = (tempoRatio != null || currentBpm <= 0f || nextBpm <= 0f) &&
-            keyDistance <= 2 &&
+        val canBlend = tempoRatio != null &&
+            pitchShift != null &&
+            keyDistance <= 1 &&
             energyDistance < 0.65f
         if (canBlend) {
-            val bars = if (seed % 2 == 0) 8 else 12
-            val duration = (bars * barMs).coerceIn(6_000f, 18_000f)
+            val bars = if (seed % 2 == 0) 8 else 16
+            val duration = (bars * barMs).coerceIn(16_000f, 32_000f)
+            val ownerIsA = vocalA < vocalB
             val loop = if (
                 nextFeatures != null &&
-                nextFeatures.dropFraction > 0.22f &&
+                nextFeatures.vocalness < 0.5f &&
                 bars >= 8
             ) {
                 val loopStart = incomingCue
                 val loopEnd = loopStart + (4 * barMs).toLong()
-                if (loopEnd < nextDuration) {
-                    LoopSpec(loopStart, loopEnd, 4)
-                } else {
-                    null
-                }
+                if (loopEnd < nextDuration) LoopSpec(loopStart, loopEnd, 4) else null
             } else {
                 null
             }
@@ -118,28 +169,51 @@ object AutoMixPlanner {
                 incomingCueMs = incomingCue,
                 durationMs = duration.toLong(),
                 tempoRatio = tempoRatio ?: 1f,
-                hardCut = false,
+                pitchSemitones = pitchShift ?: 0,
                 bassSwap = energyDistance > 0.3f,
+                bassOwnerIsA = ownerIsA,
+                secondaryHighPassHz = if (energyDistance > 0.3f) 130f else 80f,
+                midDipDb = if (vocalConflict) 3f else 0f,
+                centerAttenuationDb = if (vocalConflict) 2f else 0f,
+                headroomDb = -5f,
+                incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
                 loopIn = loop,
                 bars = bars,
-                reason = "blend: ${currentBpm.roundToInt()}→${nextBpm.roundToInt()} BPM, " +
-                    "ratio ${tempoRatio ?: 1f}, key $keyDistance"
+                reason = "blend ${bars}b: ${currentBpm.roundToInt()}→${nextBpm.roundToInt()} BPM, " +
+                    "pitch ${pitchShift ?: 0}, key $keyDistance, " +
+                    "bass ${if (ownerIsA) "A" else "B"}"
             )
         }
 
+        val bars = 8
         return TransitionPlan(
-            kind = TransitionKind.HardCut,
+            kind = TransitionKind.SafeBlend,
             outgoingCueMs = outgoingCue,
             incomingCueMs = incomingCue,
-            durationMs = 45L,
+            durationMs = (bars * barMs).coerceIn(12_000f, 24_000f).toLong(),
             tempoRatio = 1f,
-            hardCut = true,
-            bassSwap = false,
-            loopIn = null,
-            bars = 0,
-            reason = "hard cut: key $keyDistance, BPM " +
+            pitchSemitones = 0,
+            bassSwap = true,
+            bassOwnerIsA = vocalA < vocalB,
+            secondaryHighPassHz = 150f,
+            midDipDb = 5f,
+            centerAttenuationDb = 4f,
+            headroomDb = -6f,
+            incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
+            bars = bars,
+            reason = "safe blend ${bars}b: key $keyDistance, BPM " +
                 "${currentBpm.roundToInt()}→${nextBpm.roundToInt()}"
         )
+    }
+
+    private fun transientOffsetMs(
+        current: AudioFeatures?,
+        next: AudioFeatures?
+    ): Long {
+        if (current == null || next == null) return 0L
+        return (next.transientOffsetMs - current.transientOffsetMs)
+            .coerceIn(-35f, 35f)
+            .toLong()
     }
 
     private fun outgoingCueMs(
@@ -147,16 +221,30 @@ object AutoMixPlanner {
         features: AudioFeatures?,
         barMs: Float
     ): Long {
-        if (durationMs <= 25_000L) {
-            return max(0L, durationMs - 5_000L)
+        if (durationMs <= 30_000L) {
+            return max(0L, durationMs - 6_000L)
         }
-        val fraction = features?.mixOutFraction ?: 0.82f
-        val target = (durationMs * fraction).toLong()
-        val bar = barMs.toLong().coerceAtLeast(1L)
-        val offset = ((features?.beatOffsetSeconds ?: 0f) * 1000f).toLong()
-        val bars = ((target - offset).coerceAtLeast(0L) / bar)
-        val aligned = offset + bars * bar
-        return aligned.coerceIn(0L, durationMs - 2_500L)
+        val target = if (features != null) {
+            val outro = features.sections
+                .firstOrNull { it.type == SectionType.Outro }
+                ?.startFraction
+            if (outro != null) {
+                (durationMs * outro).toLong()
+            } else {
+                val lastHigh = features.sections
+                    .filter { it.type == SectionType.Chorus || it.type == SectionType.Drop }
+                    .maxByOrNull { it.endFraction }
+                if (lastHigh != null) {
+                    val raw = (durationMs * lastHigh.endFraction).toLong()
+                    max(raw - (2 * barMs).toLong(), (durationMs * 0.65f).toLong())
+                } else {
+                    (durationMs * features.mixOutFraction).toLong()
+                }
+            }
+        } else {
+            (durationMs * 0.82f).toLong()
+        }
+        return alignToBar(target, durationMs, features, barMs * 8f, down = true)
     }
 
     private fun incomingCueMs(
@@ -164,13 +252,34 @@ object AutoMixPlanner {
         features: AudioFeatures?,
         barMs: Float
     ): Long {
-        if (durationMs <= 25_000L) return 0L
-        val fraction = features?.mixInFraction ?: 0.08f
-        val target = (durationMs * fraction).toLong()
+        if (durationMs <= 30_000L) return 0L
+        val section = features?.sections?.firstOrNull {
+            it.type == SectionType.Breakdown ||
+                (it.type == SectionType.Intro && it.endFraction < 0.35f) ||
+                it.type == SectionType.Verse
+        } ?: features?.sections?.firstOrNull {
+            it.type == SectionType.Chorus || it.type == SectionType.Drop
+        }
+        val target = if (section != null) {
+            (durationMs * section.startFraction).toLong()
+        } else {
+            (durationMs * (features?.mixInFraction ?: 0.1f)).toLong()
+        }
+        return alignToBar(target, durationMs, features, barMs * 8f, down = false)
+    }
+
+    private fun alignToBar(
+        targetMs: Long,
+        durationMs: Long,
+        features: AudioFeatures?,
+        barMs: Float,
+        down: Boolean
+    ): Long {
         val bar = barMs.toLong().coerceAtLeast(1L)
         val offset = ((features?.beatOffsetSeconds ?: 0f) * 1000f).toLong()
-        val bars = ((target - offset).coerceAtLeast(0L) + bar - 1) / bar
+        val relative = (targetMs - offset).coerceAtLeast(0L)
+        val bars = if (down) relative / bar else (relative + bar - 1) / bar
         val aligned = offset + bars * bar
-        return aligned.coerceIn(0L, min(durationMs - 3_000L, durationMs - 1_000L))
+        return aligned.coerceIn(0L, durationMs - 2_000L)
     }
 }

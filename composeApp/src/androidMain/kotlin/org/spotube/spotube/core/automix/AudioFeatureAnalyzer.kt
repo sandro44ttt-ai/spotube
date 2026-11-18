@@ -22,22 +22,35 @@ class AudioFeatureAnalyzer(
 ) {
     private val memory = ConcurrentHashMap<String, AudioFeatures>()
 
-    suspend fun analyze(trackId: String, url: String): AudioFeatures? =
+    suspend fun analyze(
+        trackId: String,
+        url: String,
+        fullTrack: Boolean = true
+    ): AudioFeatures? =
         withContext(Dispatchers.IO) {
-            memory[trackId]?.let { return@withContext it }
-            cache.get(trackId)?.let {
-                memory[trackId] = it
-                return@withContext it
+            memory[trackId]?.let { cached ->
+                if (!fullTrack || cached.analysisComplete) return@withContext cached
             }
-            val samples = decodeMono(url) ?: return@withContext null
-            val features = computeFeatures(samples, ANALYSIS_SAMPLE_RATE) ?: return@withContext null
-            val stamped = features.copy(analyzedAtMs = System.currentTimeMillis())
+            cache.get(trackId)?.let { cached ->
+                if (!fullTrack || cached.analysisComplete) {
+                    memory[trackId] = cached
+                    return@withContext cached
+                }
+            }
+            val samples = decodeMono(url, if (fullTrack) MAX_ANALYSIS_SECONDS else LIGHT_ANALYSIS_SECONDS)
+                ?: return@withContext null
+            val features = computeFeatures(samples, ANALYSIS_SAMPLE_RATE, fullTrack)
+                ?: return@withContext null
+            val stamped = features.copy(
+                analysisComplete = fullTrack,
+                analyzedAtMs = System.currentTimeMillis()
+            )
             memory[trackId] = stamped
             cache.put(trackId, stamped)
             stamped
         }
 
-    private fun decodeMono(url: String): FloatArray? {
+    private fun decodeMono(url: String, maxSeconds: Long): FloatArray? {
         var extractor: MediaExtractor? = null
         var decoder: MediaCodec? = null
         return try {
@@ -69,7 +82,7 @@ class AudioFeatureAnalyzer(
             codec.configure(sourceFormat, null, null, 0)
             codec.start()
 
-            val maxSamples = (ANALYSIS_SAMPLE_RATE.toLong() * MAX_ANALYSIS_SECONDS).toInt()
+            val maxSamples = (ANALYSIS_SAMPLE_RATE.toLong() * maxSeconds).toInt()
             val output = FloatArray(maxSamples)
             var outputSize = 0
             var frameCounter = 0
@@ -177,7 +190,7 @@ class AudioFeatureAnalyzer(
         }
     }
 
-    private fun computeFeatures(samples: FloatArray, sampleRate: Int): AudioFeatures? {
+    private fun computeFeatures(samples: FloatArray, sampleRate: Int, fullTrack: Boolean): AudioFeatures? {
         val fftSize = 1024
         val hop = 256
         if (samples.size < fftSize * 8) return null
@@ -285,6 +298,32 @@ class AudioFeatureAnalyzer(
             }
         }
         val beatOffset = bestPhase / frameRate
+        var transientPeak = bestPhase
+        var transientPeakScore = -1f
+        val searchFrom = (bestPhase - lag / 4).coerceAtLeast(0)
+        val searchTo = (bestPhase + lag / 4).coerceAtMost(flux.size - 1)
+        for (index in searchFrom..searchTo) {
+            if (flux[index] > transientPeakScore) {
+                transientPeakScore = flux[index]
+                transientPeak = index
+            }
+        }
+        val transientOffsetMs = ((transientPeak - bestPhase) * 1000f / frameRate)
+            .coerceIn(-60f, 60f)
+        val halfLag = (lag / 2).coerceAtLeast(1)
+        val quarterLag = (lag / 4).coerceAtLeast(1)
+        var earlyOffbeat = 0f
+        var lateOffbeat = 0f
+        var phase = bestPhase
+        while (phase + lag < flux.size) {
+            earlyOffbeat += flux[(phase + halfLag).coerceAtMost(flux.size - 1)]
+            lateOffbeat += flux[(phase + halfLag + quarterLag).coerceAtMost(flux.size - 1)]
+            phase += lag
+        }
+        val swingRatio = (lateOffbeat / (earlyOffbeat + lateOffbeat).coerceAtLeast(1e-6f))
+            .coerceIn(0.3f, 0.7f)
+        val downbeatConfidence = (bestPhaseScore / flux.size.toFloat().coerceAtLeast(1f))
+            .coerceIn(0.2f, 1f)
 
         val keyResult = detectKey(chroma)
         val totalRms = sqrt(samples.fold(0.0) { acc, value ->
@@ -339,6 +378,15 @@ class AudioFeatureAnalyzer(
         val vocalness = (midBandMagnitude / totalMagnitude.coerceAtLeast(1e-9))
             .toFloat()
             .coerceIn(0f, 1f)
+        val sections = buildSections(
+            segmentEnergy = segmentEnergy,
+            segmentSeconds = segmentSeconds,
+            totalSeconds = totalSeconds,
+            introEnd = introEnd,
+            outroStart = outroStart,
+            vocalness = vocalness,
+            fullTrack = fullTrack
+        )
 
         return AudioFeatures(
             bpm = bpm,
@@ -354,8 +402,63 @@ class AudioFeatureAnalyzer(
             dropFraction = dropFraction,
             vocalness = vocalness,
             confidence = 0.65f,
-            durationSeconds = totalSeconds
+            durationSeconds = totalSeconds,
+            swingRatio = swingRatio,
+            transientOffsetMs = transientOffsetMs,
+            downbeatConfidence = downbeatConfidence,
+            sections = sections,
+            analysisComplete = fullTrack
         )
+    }
+
+    private fun buildSections(
+        segmentEnergy: FloatArray,
+        segmentSeconds: Int,
+        totalSeconds: Float,
+        introEnd: Float,
+        outroStart: Float,
+        vocalness: Float,
+        fullTrack: Boolean
+    ): List<AudioSection> {
+        if (segmentEnergy.isEmpty() || totalSeconds <= 0f) return emptyList()
+        val peak = segmentEnergy.maxOrNull()?.coerceAtLeast(1e-6f) ?: return emptyList()
+        val result = mutableListOf<AudioSection>()
+        for (index in segmentEnergy.indices) {
+            val start = (index * segmentSeconds / totalSeconds).coerceIn(0f, 1f)
+            val end = (((index + 1) * segmentSeconds) / totalSeconds).coerceIn(0f, 1f)
+            if (end <= start) continue
+            val normalized = (segmentEnergy[index] / peak).coerceIn(0f, 1f)
+            val type = when {
+                start < introEnd -> SectionType.Intro
+                start >= outroStart -> SectionType.Outro
+                normalized < 0.42f -> SectionType.Breakdown
+                normalized > 0.8f && vocalness > 0.46f -> SectionType.Chorus
+                normalized > 0.8f -> SectionType.Drop
+                else -> SectionType.Verse
+            }
+            val sectionVocalness = (vocalness * (0.65f + normalized * 0.35f))
+                .coerceIn(0f, 1f)
+            val previous = result.lastOrNull()
+            if (previous != null && previous.type == type && previous.endFraction >= start - 0.02f) {
+                result[result.lastIndex] = previous.copy(
+                    endFraction = end,
+                    energy = (previous.energy + normalized) / 2f,
+                    vocalness = (previous.vocalness + sectionVocalness) / 2f
+                )
+            } else {
+                result += AudioSection(
+                    startFraction = start,
+                    endFraction = end,
+                    type = type,
+                    energy = normalized,
+                    vocalness = sectionVocalness
+                )
+            }
+        }
+        if (!fullTrack && result.isNotEmpty()) {
+            return result.filter { it.type != SectionType.Outro }
+        }
+        return result
     }
 
     private fun autocorrelation(values: FloatArray, lag: Int): Float {
@@ -447,6 +550,7 @@ class AudioFeatureAnalyzer(
     companion object {
         private const val ANALYSIS_SAMPLE_RATE = 11_025
         private const val MAX_ANALYSIS_SECONDS = 360L
+        private const val LIGHT_ANALYSIS_SECONDS = 45L
 
         private val MAJOR_PROFILE = doubleArrayOf(
             6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88
