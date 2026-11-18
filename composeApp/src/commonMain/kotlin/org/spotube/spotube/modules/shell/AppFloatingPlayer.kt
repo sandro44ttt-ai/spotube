@@ -35,6 +35,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.lerp
 import org.spotube.spotube.core.ui.media.rememberDominantColor
 import com.composeunstyled.Text
 import org.spotube.millennium.composables.MillenniumIcon
+import org.spotube.spotube.core.automix.AutoMixController
 import org.spotube.spotube.core.audioplayer.AudioPlayerQueue
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.modules.saved_tracks.SavedTracksViewModel
@@ -104,6 +107,8 @@ fun AppFloatingPlayer(
         parameters = { parametersOf() }
     )
 ) {
+    val autoMixActive by AutoMixController.playbackActive.collectAsStateWithLifecycle()
+    if (autoMixActive) return
     val playerUiState = rememberPlayerUiState(audioPlayer, audioPlayerQueue)
     val scope = rememberCoroutineScope()
     val albumArtModifier =

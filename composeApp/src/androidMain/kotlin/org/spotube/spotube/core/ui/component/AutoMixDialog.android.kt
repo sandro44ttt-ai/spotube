@@ -38,6 +38,7 @@ import com.composeunstyled.Text
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.spotube.plugin_interfaces.plugin_apis.metadata.track.MetadataTrack
+import org.spotube.spotube.core.automix.AutoMixController
 import org.spotube.spotube.core.automix.AutoMixPlaybackManager
 import org.spotube.spotube.core.ui.component.spotify.SpotifyCircleTopBarButton
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
@@ -154,6 +155,7 @@ actual fun AutoMixDialog(
                             .clip(RoundedCornerShape(6.dp))
                             .clickable {
                                 manager.stop()
+                                AutoMixController.clear()
                                 onDismiss()
                             }
                             .padding(horizontal = 8.dp, vertical = 6.dp)

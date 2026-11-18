@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.ui.NavDisplay
 import org.spotube.spotube.core.DebugConfig
+import org.spotube.spotube.core.automix.AutoMixController
 import org.spotube.spotube.core.i18n.AppLocaleProvider
 import org.spotube.spotube.core.navigation.Navigator
 import org.spotube.spotube.core.navigation.Routes
@@ -46,6 +47,7 @@ import org.spotube.spotube.core.navigation.navPredictivePopTransitionSpec
 import org.spotube.spotube.core.navigation.navPushTransitionSpec
 import org.spotube.spotube.core.navigation.rememberNavigationState
 import org.spotube.spotube.core.navigation.toEntries
+import org.spotube.spotube.core.ui.component.AutoMixDialog
 import org.spotube.spotube.core.ui.component.AutoMixMiniPlayer
 import org.spotube.spotube.core.ui.component.LocalSharedTransitionScope
 import org.spotube.spotube.core.ui.theming.SpotubeTheme
@@ -209,6 +211,9 @@ fun App(
     // When it is completed the destination flips to Home and the navigation state is rebuilt.
     val startRoute = if (showOnboarding) Routes.Welcome else Routes.Home
 
+    val autoMixVisible by AutoMixController.visible.collectAsStateWithLifecycle()
+    val autoMixSession by AutoMixController.session.collectAsStateWithLifecycle()
+
     val navigationState = rememberNavigationState(
         startRoute = startRoute, topLevelRoutes = TOP_LEVEL_ROUTES
     )
@@ -287,6 +292,12 @@ fun App(
                     visible = showSupportDialog,
                     onDismissRequest = { showSupportDialog = false },
                     isReminder = supportDialogIsReminder)
+                AutoMixDialog(
+                    visible = autoMixVisible,
+                    title = autoMixSession?.title.orEmpty(),
+                    tracks = autoMixSession?.tracks.orEmpty(),
+                    onDismiss = AutoMixController::hide
+                )
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.BottomCenter

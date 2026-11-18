@@ -102,6 +102,7 @@ class MixDspProcessor : BaseAudioProcessor() {
             }
         }
         inputBuffer.position(inputBuffer.limit())
+        output.position(frameCount * channels * bytesPerSample())
         output.flip()
     }
 

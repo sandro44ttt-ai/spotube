@@ -526,6 +526,7 @@ class AutoMixPlaybackManager(
     }
 
     private fun publish() {
+        AutoMixController.setPlaybackActive(isStarted)
         val currentFeatures = current?.let { features[it.id] }
         val nextFeatures = next?.let { features[it.id] }
         val player = activePlayer()

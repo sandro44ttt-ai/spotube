@@ -24,9 +24,11 @@ import coil3.compose.AsyncImage
 import com.composeunstyled.Text
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
+import org.spotube.spotube.core.automix.AutoMixController
 import org.spotube.spotube.core.automix.AutoMixPlaybackManager
 import org.spotube.spotube.core.ui.component.spotify.SpotifyTokens
 import org.spotube.spotube.core.ui.theming.AppTheme
+import org.spotube.millennium.composables.MillenniumIcon
 import org.spotube.spotube.resources.iconsax.Iconsax
 import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.auto_mix_pause
@@ -44,7 +46,7 @@ actual fun AutoMixMiniPlayer(modifier: Modifier) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(SpotifyTokens.Surface)
-            .clickable { manager.togglePlayPause() }
+            .clickable { AutoMixController.show() }
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -90,15 +92,15 @@ actual fun AutoMixMiniPlayer(modifier: Modifier) {
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Text(
-            text = if (state.isPlaying) "??" else "?",
-            style = AppTheme.typography.titleLarge.copy(
-                fontSize = 20.sp,
-                color = Color.White
+        MillenniumIcon(
+            imageVector = if (state.isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
+            contentDescription = stringResource(
+                if (state.isPlaying) Res.string.auto_mix_pause else Res.string.auto_mix_play
             ),
+            tint = Color.White,
             modifier = Modifier
+                .size(28.dp)
                 .clickable { manager.togglePlayPause() }
-                .padding(horizontal = 6.dp)
         )
     }
 }
