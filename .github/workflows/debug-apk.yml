@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   COMPOSE_WEBVIEW_REPO: KRTirtho/ComposeNativeWebview
@@ -100,3 +100,11 @@ jobs:
           path: composeApp/build/outputs/apk/**/*.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish latest debug APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: debug-latest
+          name: Spotube debug latest
+          prerelease: true
+          files: composeApp/build/outputs/apk/**/*.apk
