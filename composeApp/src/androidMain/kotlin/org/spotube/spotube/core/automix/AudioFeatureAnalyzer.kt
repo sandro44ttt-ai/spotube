@@ -78,16 +78,18 @@ class AudioFeatureAnalyzer(
         val file = File.createTempFile("automix-analysis-", ".audio", context.cacheDir)
         val client = httpClientFactory.create {
             install(HttpTimeout) {
-                requestTimeoutMillis = 25_000
+                requestTimeoutMillis = 45_000
                 connectTimeoutMillis = 8_000
-                socketTimeoutMillis = 15_000
+                socketTimeoutMillis = 20_000
             }
         }
         return try {
-            val completed = withTimeoutOrNull(30_000L) {
+            val completed = withTimeoutOrNull(50_000L) {
                 client.prepareGet(url) {
                     headers.append(HttpHeaders.UserAgent, "Mozilla/5.0")
                     headers.append(HttpHeaders.Accept, "*/*")
+                    headers.append(HttpHeaders.Range, "bytes=0-")
+                    headers.append("Accept-Encoding", "identity")
                 }.execute { response ->
                     if (!response.status.isSuccess()) {
                         Log.w("AutoMix", "analysis HTTP ${response.status.value} for $url")
