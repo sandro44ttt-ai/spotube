@@ -284,6 +284,13 @@ class AudioFeatureAnalyzer(
         val chroma = DoubleArray(12)
         var midBandMagnitude = 0.0
         var totalMagnitude = 0.0
+        var centroidWeighted = 0.0
+        var lowBandMagnitude = 0.0
+        var highBandMagnitude = 0.0
+        var zeroCrossings = 0
+        for (index in 1 until samples.size) {
+            if ((samples[index - 1] < 0f) != (samples[index] < 0f)) zeroCrossings++
+        }
 
         for (frame in 0 until frameCount) {
             val offset = frame * hop
@@ -305,7 +312,11 @@ class AudioFeatureAnalyzer(
                     if (lowDifference > 0f) lowFlux[frame] += lowDifference
                 }
                 previousLowMagnitude[bin] = magnitude
-                totalMagnitude += magnitude
+                val weighted = magnitude.toDouble()
+                totalMagnitude += weighted
+                centroidWeighted += frequency * weighted
+                if (frequency < 250f) lowBandMagnitude += weighted
+                if (frequency >= 4000f) highBandMagnitude += weighted
                 if (frequency in 300f..3000f) midBandMagnitude += magnitude
                 if (frequency in 80f..2000f) {
                     val midi = 69.0 + 12.0 * ln(frequency / 440.0) / ln(2.0)
@@ -525,6 +536,47 @@ class AudioFeatureAnalyzer(
             vocalness = vocalness,
             fullTrack = fullTrack
         )
+        val safeMagnitude = totalMagnitude.coerceAtLeast(1e-9)
+        val centroid = centroidWeighted / safeMagnitude
+        val lowRatio = (lowBandMagnitude / safeMagnitude).toFloat()
+        val highRatio = (highBandMagnitude / safeMagnitude).toFloat()
+        val zcrRate = zeroCrossings.toFloat() / samples.size.coerceAtLeast(1)
+        val onsetFrames = flux.count { it > 0.6f }
+        val onsetRate = onsetFrames.toFloat() / totalSeconds.coerceAtLeast(1f)
+        val density = ((onsetRate / 5f) * 0.65f + (highRatio / 0.3f) * 0.35f)
+            .coerceIn(0f, 1f)
+        val percussiveness = ((flux.count { it > 1.2f }.toFloat() /
+            totalSeconds.coerceAtLeast(1f) / 2f) * 0.7f + (highRatio / 0.3f) * 0.3f)
+            .coerceIn(0f, 1f)
+        val brightness = sqrt(centroid / 8000.0).toFloat().coerceIn(0f, 1f)
+        val warmth = (lowRatio / 0.45f).coerceIn(0f, 1f)
+        val roughness = ((highRatio / 0.25f) * 0.65f + (zcrRate / 0.15f) * 0.35f)
+            .coerceIn(0f, 1f)
+        val meanSegment = segmentEnergy.average().toFloat().coerceAtLeast(1e-6f)
+        val segmentVariance = segmentEnergy.fold(0.0) { acc, value ->
+            val delta = value - meanSegment
+            acc + delta * delta
+        } / segmentEnergy.size.coerceAtLeast(1)
+        val dynamicRange = (sqrt(segmentVariance).toFloat() / meanSegment / 1.2f)
+            .coerceIn(0f, 1f)
+        val acousticness = (1f - percussiveness * 0.4f - highRatio.toFloat() * 1.5f -
+            density * 0.2f).coerceIn(0f, 1f)
+        val valence = ((if (keyResult.minor) 0.35f else 0.65f) * 0.45f +
+            brightness * 0.3f + energy * 0.25f).coerceIn(0f, 1f)
+        val danceability = (bpmConfidence * 0.45f +
+            (if (bpm in 80f..150f) 0.25f else 0.1f) +
+            density * 0.2f + energy * 0.1f).coerceIn(0f, 1f)
+        val vibe = VibeProfile(
+            brightness = brightness,
+            density = density,
+            percussiveness = percussiveness,
+            roughness = roughness,
+            warmth = warmth,
+            acousticness = acousticness,
+            dynamicRange = dynamicRange,
+            valence = valence,
+            danceability = danceability
+        )
 
         return AudioFeatures(
             bpm = bpm,
@@ -545,6 +597,7 @@ class AudioFeatureAnalyzer(
             swingRatio = swingRatio,
             transientOffsetMs = transientOffsetMs,
             downbeatConfidence = downbeatConfidence,
+            vibe = vibe,
             sections = sections,
             analysisComplete = fullTrack
         )

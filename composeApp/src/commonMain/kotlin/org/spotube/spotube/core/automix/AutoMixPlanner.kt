@@ -43,6 +43,7 @@ data class TransitionPlan(
     val bars: Int = 8,
     val level: AutoMixLevel = AutoMixLevel.Safe,
     val vibeDistance: Float = 1f,
+    val earlyCut: Boolean = false,
     val loopBeats: Int = 0,
     val loopRoll: Boolean = false,
     val loopBpm: Float = 0f,
@@ -66,9 +67,9 @@ object AutoMixPlanner {
         val nextDuration = next.durationMs.coerceAtLeast(1L)
         val seed = (((current.id + next.id).hashCode() and 0x7FFFFFFF) / 10) % 4
 
-        val outgoingCue = outgoingCueMs(currentDuration, currentFeatures, barMs)
+        var outgoingCue = outgoingCueMs(currentDuration, currentFeatures, barMs)
         val nextBarMs = if (nextBpm > 0f) 60_000f / nextBpm * 4f else barMs
-        val incomingCue = incomingCueMs(nextDuration, nextFeatures, nextBarMs)
+        var incomingCue = incomingCueMs(nextDuration, nextFeatures, nextBarMs)
         val tempoRatio = AutoMixQueueSelector.tempoRatio(currentBpm, nextBpm)
         val pitchShift = if (currentFeatures != null && nextFeatures != null) {
             AutoMixQueueSelector.pitchShiftFor(
@@ -160,7 +161,30 @@ object AutoMixPlanner {
             val duration = (bars * barMs).coerceIn(
                 if (level == AutoMixLevel.Safe) 12_000f else 16_000f,
                 if (level == AutoMixLevel.Bold) 40_000f else 32_000f
-            )
+            ).coerceAtMost((currentDuration - 6_000L).toFloat().coerceAtLeast(8_000f))
+            val durationMs = duration.toLong()
+            val early = if (vibeDistance <= 0.30f) {
+                earlyCutCues(
+                    currentDurationMs = currentDuration,
+                    currentFeatures = currentFeatures,
+                    nextDurationMs = nextDuration,
+                    nextFeatures = nextFeatures,
+                    currentBarMs = barMs,
+                    nextBarMs = nextBarMs
+                )
+            } else {
+                null
+            }
+            val useEarlyCut = early != null &&
+                early.first + durationMs + 500L <= currentDuration
+            val startCue = if (useEarlyCut) {
+                early!!.first
+            } else {
+                fitTransitionStart(outgoingCue, currentDuration, durationMs)
+            }
+            val entryCue = if (useEarlyCut) early!!.second else incomingCue
+            outgoingCue = startCue
+            incomingCue = entryCue
             val ownerIsA = vocalA < vocalB
             val loopBeats = when (level) {
                 AutoMixLevel.Safe -> 0
@@ -181,7 +205,7 @@ object AutoMixPlanner {
                 kind = TransitionKind.Mashup,
                 outgoingCueMs = outgoingCue,
                 incomingCueMs = incomingCue,
-                durationMs = duration.toLong(),
+                durationMs = durationMs,
                 tempoRatio = tempoRatio ?: 1f,
                 pitchSemitones = pitchShift ?: 0,
                 bassSwap = true,
@@ -189,19 +213,21 @@ object AutoMixPlanner {
                 secondaryHighPassHz = if (level == AutoMixLevel.Safe) 110f else 140f,
                 midDipDb = midDip,
                 centerAttenuationDb = center,
-                headroomDb = if (level == AutoMixLevel.Safe) -4f else -6f,
+                headroomDb = if (level == AutoMixLevel.Safe) -2f else -3f,
                 incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
                 bars = bars,
                 level = level,
                 vibeDistance = vibeDistance,
+                earlyCut = useEarlyCut,
                 loopBeats = loopBeats,
                 loopRoll = level == AutoMixLevel.Bold && seed % 2 == 1,
                 loopBpm = nextBpm * (tempoRatio ?: 1f),
                 reason = "mashup ${level.name.lowercase()} ${bars}b: " +
-                    "${currentBpm.roundToInt()}?${nextBpm.roundToInt()} BPM, " +
+                    "${currentBpm.roundToInt()}->${nextBpm.roundToInt()} BPM, " +
                     "pitch ${pitchShift ?: 0}, key $keyDistance, vibe ${(vibeDistance * 100).roundToInt()}%, " +
                     "bass ${if (ownerIsA) "A" else "B"}, " +
-                    "swing ${(swingDiff * 100).roundToInt()}%"
+                    "swing ${(swingDiff * 100).roundToInt()}%" +
+                    if (useEarlyCut) " early-cut" else ""
             )
         }
         val canBlend = tempoRatio != null &&
@@ -212,12 +238,15 @@ object AutoMixPlanner {
         if (canBlend) {
             val bars = if (seed % 2 == 0) 8 else 16
             val duration = (bars * barMs).coerceIn(16_000f, 32_000f)
+                .coerceAtMost((currentDuration - 6_000L).toFloat().coerceAtLeast(8_000f))
+            val durationMs = duration.toLong()
+            val startCue = fitTransitionStart(outgoingCue, currentDuration, durationMs)
             val ownerIsA = vocalA < vocalB
             return TransitionPlan(
                 kind = if (tempoRatio != null) TransitionKind.TempoBlend else TransitionKind.BeatBlend,
-                outgoingCueMs = outgoingCue,
+                outgoingCueMs = startCue,
                 incomingCueMs = incomingCue,
-                durationMs = duration.toLong(),
+                durationMs = durationMs,
                 tempoRatio = tempoRatio ?: 1f,
                 pitchSemitones = pitchShift ?: 0,
                 bassSwap = energyDistance > 0.3f,
@@ -225,22 +254,25 @@ object AutoMixPlanner {
                 secondaryHighPassHz = if (energyDistance > 0.3f) 130f else 80f,
                 midDipDb = if (vocalConflict) 3f else 0f,
                 centerAttenuationDb = if (vocalConflict) 2f else 0f,
-                headroomDb = -5f,
+                headroomDb = -3f,
                 incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
                 bars = bars,
                 vibeDistance = vibeDistance,
-                reason = "blend ${bars}b: ${currentBpm.roundToInt()}→${nextBpm.roundToInt()} BPM, " +
+                reason = "blend ${bars}b: ${currentBpm.roundToInt()}->${nextBpm.roundToInt()} BPM, " +
                     "pitch ${pitchShift ?: 0}, key $keyDistance, vibe ${(vibeDistance * 100).roundToInt()}%, " +
                     "bass ${if (ownerIsA) "A" else "B"}"
             )
         }
 
         val bars = 8
+        val durationMs = (bars * barMs).coerceIn(12_000f, 24_000f)
+            .coerceAtMost((currentDuration - 6_000L).toFloat().coerceAtLeast(8_000f))
+            .toLong()
         return TransitionPlan(
             kind = TransitionKind.SafeBlend,
-            outgoingCueMs = outgoingCue,
+            outgoingCueMs = fitTransitionStart(outgoingCue, currentDuration, durationMs),
             incomingCueMs = incomingCue,
-            durationMs = (bars * barMs).coerceIn(12_000f, 24_000f).toLong(),
+            durationMs = durationMs,
             tempoRatio = 1f,
             pitchSemitones = 0,
             bassSwap = true,
@@ -248,13 +280,68 @@ object AutoMixPlanner {
             secondaryHighPassHz = 150f,
             midDipDb = 5f,
             centerAttenuationDb = 4f,
-            headroomDb = -6f,
+            headroomDb = -3f,
             incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
             bars = bars,
             level = AutoMixLevel.Safe,
             vibeDistance = vibeDistance,
             reason = "safe blend ${bars}b: key $keyDistance, vibe ${(vibeDistance * 100).roundToInt()}%, BPM " +
-                "${currentBpm.roundToInt()}→${nextBpm.roundToInt()}"
+                "${currentBpm.roundToInt()}->${nextBpm.roundToInt()}"
+        )
+    }
+
+    private fun fitTransitionStart(
+        cueMs: Long,
+        trackDurationMs: Long,
+        transitionDurationMs: Long
+    ): Long {
+        val latest = (trackDurationMs - transitionDurationMs - 500L).coerceAtLeast(0L)
+        return cueMs.coerceIn(0L, latest)
+    }
+
+    private fun earlyCutCues(
+        currentDurationMs: Long,
+        currentFeatures: AudioFeatures?,
+        nextDurationMs: Long,
+        nextFeatures: AudioFeatures?,
+        currentBarMs: Float,
+        nextBarMs: Float
+    ): Pair<Long, Long>? {
+        if (currentDurationMs < 90_000L || nextDurationMs < 45_000L) return null
+        val current = currentFeatures ?: return null
+        val next = nextFeatures ?: return null
+        if (!current.analysisComplete || !next.analysisComplete) return null
+        val breakdown = current.sections
+            .filter {
+                it.type == SectionType.Breakdown &&
+                    it.startFraction in 0.28f..0.78f &&
+                    ((it.endFraction - it.startFraction) * currentDurationMs /
+                        currentBarMs.coerceAtLeast(1f)) >= 6f
+            }
+            .maxByOrNull { section ->
+                (section.endFraction - section.startFraction) +
+                    (1f - section.energy) * 0.4f
+            } ?: return null
+        val entry = next.sections.firstOrNull {
+            it.type == SectionType.Drop && it.energy >= 0.40f
+        } ?: next.sections.firstOrNull {
+            it.type == SectionType.Chorus && it.energy >= 0.45f
+        } ?: return null
+        if (entry.startFraction > 0.55f) return null
+        val exitMs = (currentDurationMs * breakdown.startFraction).toLong()
+        val entryMs = (nextDurationMs * entry.startFraction).toLong()
+        return alignToBar(
+            exitMs,
+            currentDurationMs,
+            current,
+            currentBarMs * 8f,
+            down = true
+        ) to alignToBar(
+            entryMs,
+            nextDurationMs,
+            next,
+            nextBarMs * 8f,
+            down = true
         )
     }
 

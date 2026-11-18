@@ -51,11 +51,9 @@ import spotube.composeapp.generated.resources.auto_mix_close
 import spotube.composeapp.generated.resources.auto_mix_minimize
 import spotube.composeapp.generated.resources.auto_mix_stop
 import spotube.composeapp.generated.resources.auto_mix_next
-import spotube.composeapp.generated.resources.auto_mix_next_track
 import spotube.composeapp.generated.resources.auto_mix_no_tracks
 import spotube.composeapp.generated.resources.auto_mix_pause
 import spotube.composeapp.generated.resources.auto_mix_play
-import spotube.composeapp.generated.resources.auto_mix_previous
 import spotube.composeapp.generated.resources.auto_mix_style_blend
 import spotube.composeapp.generated.resources.auto_mix_style_cut
 import spotube.composeapp.generated.resources.auto_mix_style_mashup
@@ -291,14 +289,9 @@ actual fun AutoMixDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SpotifyCircleTopBarButton(
-                        icon = Iconsax.SpotifySkipBackGlyph,
-                        contentDescription = stringResource(Res.string.auto_mix_previous),
-                        onClick = manager::skipPrevious
-                    )
                     SpotifyCircleTopBarButton(
                         icon = if (state.isPlaying) Iconsax.SpotifyPause else Iconsax.SpotifyPlay,
                         contentDescription = if (state.isPlaying) {
@@ -307,11 +300,6 @@ actual fun AutoMixDialog(
                             stringResource(Res.string.auto_mix_play)
                         },
                         onClick = manager::togglePlayPause
-                    )
-                    SpotifyCircleTopBarButton(
-                        icon = Iconsax.SpotifySkipNextGlyph,
-                        contentDescription = stringResource(Res.string.auto_mix_next_track),
-                        onClick = manager::skipNext
                     )
                 }
 

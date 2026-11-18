@@ -1,4 +1,4 @@
-﻿package org.spotube.spotube.media
+package org.spotube.spotube.media
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -29,11 +29,9 @@ import org.spotube.spotube.core.automix.AutoMixPlaybackManager
 import org.spotube.spotube.core.automix.AutoMixController
 import org.spotube.spotube.core.i18n.getString
 import spotube.composeapp.generated.resources.Res
-import spotube.composeapp.generated.resources.auto_mix_next_track
 import spotube.composeapp.generated.resources.auto_mix_notification_text
 import spotube.composeapp.generated.resources.auto_mix_pause
 import spotube.composeapp.generated.resources.auto_mix_play
-import spotube.composeapp.generated.resources.auto_mix_previous
 import spotube.composeapp.generated.resources.auto_mix_title
 
 class AutoMixForegroundService : Service(), KoinComponent {
@@ -41,8 +39,6 @@ class AutoMixForegroundService : Service(), KoinComponent {
         private const val CHANNEL_ID = "automix_playback"
         private const val NOTIFICATION_ID = 4243
         private const val ACTION_TOGGLE = "org.spotube.spotube.automix.TOGGLE"
-        private const val ACTION_NEXT = "org.spotube.spotube.automix.NEXT"
-        private const val ACTION_PREVIOUS = "org.spotube.spotube.automix.PREVIOUS"
 
         fun start(context: Context) {
             val intent = Intent(context, AutoMixForegroundService::class.java)
@@ -95,13 +91,7 @@ class AutoMixForegroundService : Service(), KoinComponent {
                     }
                 }
 
-                override fun onSkipToNext() {
-                    manager.skipNext()
-                }
 
-                override fun onSkipToPrevious() {
-                    manager.skipPrevious()
-                }
             })
             isActive = true
         }
@@ -110,8 +100,6 @@ class AutoMixForegroundService : Service(), KoinComponent {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_TOGGLE -> if (manager.state.value.isActive) manager.togglePlayPause()
-            ACTION_NEXT -> manager.skipNext()
-            ACTION_PREVIOUS -> manager.skipPrevious()
         }
         val state = manager.state.value
         startForeground(NOTIFICATION_ID, buildNotification(state))
@@ -163,9 +151,7 @@ class AutoMixForegroundService : Service(), KoinComponent {
                 .setActions(
                     PlaybackStateCompat.ACTION_PLAY or
                         PlaybackStateCompat.ACTION_PAUSE or
-                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE
                 )
                 .setState(playbackState, state.positionMs, if (state.isPlaying) 1f else 0f)
                 .build()
@@ -186,14 +172,13 @@ class AutoMixForegroundService : Service(), KoinComponent {
         val artistText = state.current?.artists?.joinToString(", ") { it.name }
             ?: runBlocking { getString(Res.string.auto_mix_notification_text) }
         val text = listOfNotNull(artistText, state.planLevel?.name?.uppercase())
-            .joinToString(" · ")
+            .joinToString(" - ")
         val playPauseLabel = runBlocking {
             getString(
                 if (state.isPlaying) Res.string.auto_mix_pause else Res.string.auto_mix_play
             )
         }
-        val previousLabel = runBlocking { getString(Res.string.auto_mix_previous) }
-        val nextLabel = runBlocking { getString(Res.string.auto_mix_next_track) }
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
@@ -205,25 +190,15 @@ class AutoMixForegroundService : Service(), KoinComponent {
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .addAction(
-                android.R.drawable.ic_media_previous,
-                previousLabel,
-                serviceAction(ACTION_PREVIOUS, 1)
-            )
-            .addAction(
                 if (state.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
                 playPauseLabel,
-                serviceAction(ACTION_TOGGLE, 2)
-            )
-            .addAction(
-                android.R.drawable.ic_media_next,
-                nextLabel,
-                serviceAction(ACTION_NEXT, 3)
+                serviceAction(ACTION_TOGGLE, 1)
             )
         mediaSession?.let { session ->
             builder.setStyle(
                 MediaNotificationCompat.MediaStyle()
                     .setMediaSession(session.sessionToken)
-                    .setShowActionsInCompactView(0, 1, 2)
+                    .setShowActionsInCompactView(0)
             )
         }
         return builder.build()

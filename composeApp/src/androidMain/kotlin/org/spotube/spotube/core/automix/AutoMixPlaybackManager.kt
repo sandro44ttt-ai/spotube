@@ -262,49 +262,15 @@ class AutoMixPlaybackManager(
         publish()
     }
 
-    fun skipNext() {
+    private fun skipNext() {
         if (!isStarted || isTransitioning) return
-        val target = queue.getOrNull(index + 1)
-        if (target == null) {
-            preloadNext()
-            return
-        }
+        val target = queue.getOrNull(index + 1) ?: return
         activePlayer().pause()
         activePlayer().playbackParameters = PlaybackParameters(1f)
         activeSpeed = 1f
         activePitchSemitones = 0
         if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
-        lastError = ""
-        planLevel = null
-        planVibeDistance = 1f
-        planReason = ""
         index += 1
-        current = target
-        positionMs = 0L
-        durationMs = 0L
-        loadTrack(activePlayer(), target, 1f)
-        activePlayer().play()
-        isPlaying = true
-        next = queue.getOrNull(index + 1)
-        preloadNext()
-        ensureAnalysis()
-        publish()
-    }
-
-    fun skipPrevious() {
-        if (!isStarted || isTransitioning) return
-        val previousIndex = (index - 1).coerceAtLeast(0)
-        val target = queue.getOrNull(previousIndex) ?: return
-        activePlayer().pause()
-        activePlayer().playbackParameters = PlaybackParameters(1f)
-        activeSpeed = 1f
-        activePitchSemitones = 0
-        if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
-        lastError = ""
-        planLevel = null
-        planVibeDistance = 1f
-        planReason = ""
-        index = previousIndex
         current = target
         positionMs = 0L
         durationMs = 0L
@@ -388,13 +354,26 @@ class AutoMixPlaybackManager(
         secondaryDsp.midDipDb = 0f
         secondaryDsp.centerAttenuationDb = 0f
         val headroomGain = 10.0.pow(plan.headroomDb / 20.0).toFloat()
-        fromDsp.gain = headroomGain
+        fromDsp.gain = 1f
         toDsp.gain = headroomGain
+        val remainingMs = if (from.duration > 0L) {
+            (from.duration - from.currentPosition).coerceAtLeast(0L)
+        } else {
+            plan.durationMs
+        }
+        val effectiveDurationMs = plan.durationMs.coerceAtMost(
+            (remainingMs - 500L).coerceAtLeast(4_000L)
+        )
         transitionJob = scope.launch {
             try {
             var loopStopped = false
-            val steps = (plan.durationMs / 50L).toInt().coerceAtLeast(1)
+            val steps = (effectiveDurationMs / 50L).toInt().coerceAtLeast(1)
             for (step in 1..steps) {
+                if (from.playbackState == Player.STATE_ENDED) {
+                    toDsp.gain = 1f
+                    to.volume = 1f
+                    break
+                }
                 val t = step.toFloat() / steps.toFloat()
                 transitionProgress = t
                 from.volume = sqrt(1f - t)
@@ -403,9 +382,9 @@ class AutoMixPlaybackManager(
                     toDsp.stopLoop()
                     loopStopped = true
                 }
-                if (t > 0.75f) {
+                if (t > 0.35f) {
                     toDsp.gain = headroomGain +
-                        (1f - headroomGain) * ((t - 0.75f) / 0.25f)
+                        (1f - headroomGain) * ((t - 0.35f) / 0.55f).coerceIn(0f, 1f)
                 }
                 if (plan.kind == TransitionKind.SafeBlend) {
                     secondaryDsp.lowPassHz = 20_000f - 12_000f * t * t
@@ -585,7 +564,10 @@ class AutoMixPlaybackManager(
             playbackState = player.playbackState,
             lastError = lastError,
             debugInfo = "state=${player.playbackState} playing=${player.isPlaying} " +
-                "vol=${(player.volume * 100).roundToInt()}% session=$session " +
+                "vol=${(player.volume * 100).roundToInt()}% " +
+                "gain=${((if (activeIsA) dspA.gain else dspB.gain) * 100).roundToInt()}% " +
+                "eff=${((player.volume * (if (activeIsA) dspA.gain else dspB.gain)) * 100).roundToInt()}% " +
+                "session=$session " +
                 "buffered=${player.bufferedPosition} " +
                 "media=${audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)}/" +
                 "${audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",

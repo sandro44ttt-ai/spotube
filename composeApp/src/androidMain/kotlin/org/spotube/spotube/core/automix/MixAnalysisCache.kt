@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
 
-private const val MIX_ANALYSIS_CACHE_VERSION = 3
+private const val MIX_ANALYSIS_CACHE_VERSION = 4
 
 @Serializable
 private data class MixAnalysisFile(
