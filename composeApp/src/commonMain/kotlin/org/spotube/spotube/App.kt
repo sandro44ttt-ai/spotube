@@ -20,6 +20,7 @@ package org.spotube.spotube
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -29,8 +30,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.ui.NavDisplay
 import org.spotube.spotube.core.DebugConfig
@@ -43,6 +46,7 @@ import org.spotube.spotube.core.navigation.navPredictivePopTransitionSpec
 import org.spotube.spotube.core.navigation.navPushTransitionSpec
 import org.spotube.spotube.core.navigation.rememberNavigationState
 import org.spotube.spotube.core.navigation.toEntries
+import org.spotube.spotube.core.ui.component.AutoMixMiniPlayer
 import org.spotube.spotube.core.ui.component.LocalSharedTransitionScope
 import org.spotube.spotube.core.ui.theming.SpotubeTheme
 import org.spotube.spotube.modules.library.LibraryTab
@@ -283,6 +287,14 @@ fun App(
                     visible = showSupportDialog,
                     onDismissRequest = { showSupportDialog = false },
                     isReminder = supportDialogIsReminder)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    AutoMixMiniPlayer(
+                        Modifier.padding(start = 8.dp, end = 8.dp, bottom = 88.dp)
+                    )
+                }
             }
         }
     }

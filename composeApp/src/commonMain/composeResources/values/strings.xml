@@ -253,6 +253,8 @@
     <string name="mix_lab_android_only">Mix Lab is Android-only.</string>
     <string name="auto_mix_title">Auto Mix</string>
     <string name="auto_mix_close">Close</string>
+    <string name="auto_mix_minimize">Minimize</string>
+    <string name="auto_mix_stop">Stop</string>
     <string name="auto_mix_pause">Pause</string>
     <string name="auto_mix_play">Play</string>
     <string name="auto_mix_next">Next</string>

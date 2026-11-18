@@ -1,6 +1,7 @@
 package org.spotube.spotube.core.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,8 @@ import kotlin.math.roundToInt
 import spotube.composeapp.generated.resources.Res
 import spotube.composeapp.generated.resources.auto_mix_analyzing
 import spotube.composeapp.generated.resources.auto_mix_close
+import spotube.composeapp.generated.resources.auto_mix_minimize
+import spotube.composeapp.generated.resources.auto_mix_stop
 import spotube.composeapp.generated.resources.auto_mix_next
 import spotube.composeapp.generated.resources.auto_mix_next_track
 import spotube.composeapp.generated.resources.auto_mix_no_tracks
@@ -88,10 +91,7 @@ actual fun AutoMixDialog(
     }
 
     Dialog(
-        onDismissRequest = {
-            manager.stop()
-            onDismiss()
-        },
+        onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
@@ -118,11 +118,8 @@ actual fun AutoMixDialog(
                 ) {
                     SpotifyCircleTopBarButton(
                         icon = Iconsax.SpotifyChevronDown,
-                        contentDescription = stringResource(Res.string.auto_mix_close),
-                        onClick = {
-                            manager.stop()
-                            onDismiss()
-                        }
+                        contentDescription = stringResource(Res.string.auto_mix_minimize),
+                        onClick = onDismiss
                     )
                     Column(
                         modifier = Modifier
@@ -147,6 +144,20 @@ actual fun AutoMixDialog(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                    Text(
+                        text = stringResource(Res.string.auto_mix_stop),
+                        style = AppTheme.typography.labelMedium.copy(
+                            fontSize = 11.sp,
+                            color = SpotifyTokens.Muted
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable {
+                                manager.stop()
+                                onDismiss()
+                            }
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))

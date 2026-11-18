@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.spotube.plugin_interfaces.plugin_apis.metadata.track.MetadataTrack
 import org.spotube.plugin_interfaces.plugin_apis.audio.StreamProtocol
 import org.spotube.spotube.core.server.StreamRequest
@@ -345,6 +346,8 @@ class AutoMixPlaybackManager(
         val toDsp = if (activeIsA) dspB else dspA
         fromDsp.resetEffects()
         toDsp.resetEffects()
+        analysisJob?.cancel()
+        analysisJob = null
         isTransitioning = true
         transitionKind = plan.kind
         transitionStyle = styleFor(plan.kind)
@@ -368,6 +371,7 @@ class AutoMixPlaybackManager(
         fromDsp.gain = headroomGain
         toDsp.gain = headroomGain
         transitionJob = scope.launch {
+            try {
             val steps = (plan.durationMs / 50L).toInt().coerceAtLeast(1)
             for (step in 1..steps) {
                 val t = step.toFloat() / steps.toFloat()
@@ -406,6 +410,21 @@ class AutoMixPlaybackManager(
             preloadNext()
             ensureAnalysis()
             publish()
+            } catch (e: Exception) {
+                Log.e("AutoMix", "transition failed", e)
+                lastError = "transition: ${e.message.orEmpty()}"
+                loopJob?.cancel()
+                loopJob = null
+                fromDsp.resetEffects()
+                toDsp.resetEffects()
+                from.pause()
+                to.pause()
+                from.volume = 1f
+                to.volume = 0f
+                isTransitioning = false
+                transitionProgress = 0f
+                publish()
+            }
         }
     }
 
@@ -670,6 +689,7 @@ class AutoMixPlaybackManager(
                     features[track.id] = result
                     refineQueue()
                     publish()
+                    delay(180)
                 }
             } catch (e: CancellationException) {
                 throw e
