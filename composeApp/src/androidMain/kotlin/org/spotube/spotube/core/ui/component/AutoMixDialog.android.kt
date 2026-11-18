@@ -312,12 +312,12 @@ actual fun AutoMixDialog(
                             stringResource(
                                 Res.string.auto_mix_stems_downloading,
                                 (state.stemProgress * 100).roundToInt()
-                            )
+                            ) + "%"
                         AutoMixPlaybackManager.StemPhase.Separating ->
                             stringResource(
                                 Res.string.auto_mix_stems_separating,
                                 (state.stemProgress * 100).roundToInt()
-                            )
+                            ) + "%"
                         AutoMixPlaybackManager.StemPhase.Ready ->
                             stringResource(Res.string.auto_mix_stems_ready)
                         AutoMixPlaybackManager.StemPhase.Error ->

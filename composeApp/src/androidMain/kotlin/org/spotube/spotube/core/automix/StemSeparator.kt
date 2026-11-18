@@ -23,6 +23,9 @@ import java.nio.FloatBuffer
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.spotube.spotube.core.network.HttpClientFactory
@@ -44,6 +47,12 @@ class StemSeparator(
     private var session: OrtSession? = null
 
     fun modelReady(): Boolean = modelFile.exists() && modelFile.length() > MIN_MODEL_BYTES
+
+    @Synchronized
+    fun closeSession() {
+        runCatching { session?.close() }
+        session = null
+    }
 
     suspend fun ensureModel(onProgress: (Float) -> Unit = {}): File? = withContext(Dispatchers.IO) {
         if (modelReady()) return@withContext modelFile
@@ -126,13 +135,15 @@ class StemSeparator(
         frames: Int,
         onProgress: (Float) -> Unit = {}
     ): StemWindow? = withContext(Dispatchers.IO) {
-        val pcm = decodeStereo(url) ?: return@withContext null
-        val startFrame = (startMs * SAMPLE_RATE / 1000L).toInt().coerceAtLeast(0)
-        val available = ((pcm.size / 2) - startFrame).coerceAtLeast(0)
-        val requested = frames.coerceAtLeast(1)
-        val actual = min(available, requested)
-        if (actual < SAMPLE_RATE * 2) return@withContext null
-        separatePcm(pcm, startFrame, actual, onProgress)
+        val pcm = withTimeoutOrNull(DECODE_TIMEOUT_MS) {
+            decodeStereoWindow(url, startMs, frames)
+        } ?: run {
+            Log.w("AutoMix", "stem decode timeout for start=${startMs}ms frames=$frames")
+            return@withContext null
+        }
+        val available = pcm.size / 2
+        if (available < SAMPLE_RATE * 2) return@withContext null
+        separatePcm(pcm, 0, min(available, frames.coerceAtLeast(1)), onProgress)
     }
 
     private suspend fun separatePcm(
@@ -142,6 +153,7 @@ class StemSeparator(
         onProgress: (Float) -> Unit
     ): StemWindow? {
         val onnx = ensureSession() ?: return null
+        Log.d("AutoMix", "stem inference start frames=$frames")
         val overlap = SEGMENT_SAMPLES / 4
         val stride = SEGMENT_SAMPLES - overlap
         val drums = FloatArray(frames * 2)
@@ -234,6 +246,8 @@ class StemSeparator(
             val options = OrtSession.SessionOptions().apply {
                 setIntraOpNumThreads(4)
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                runCatching { setMemoryPatternOptimization(false) }
+                runCatching { setCPUArenaAllocator(false) }
             }
             val created = env.createSession(modelFile.absolutePath, options)
             environment = env
@@ -246,10 +260,16 @@ class StemSeparator(
         }
     }
 
-    private fun decodeStereo(url: String): FloatArray? {
+    private suspend fun decodeStereoWindow(
+        url: String,
+        startMs: Long,
+        requestedFrames: Int
+    ): FloatArray? {
         var extractor: MediaExtractor? = null
         var decoder: MediaCodec? = null
+        val windowStartUs = startMs * 1000L
         return try {
+            Log.d("AutoMix", "stem decode start startMs=$startMs frames=$requestedFrames")
             val source = MediaExtractor()
             extractor = source
             source.setDataSource(url, emptyMap())
@@ -266,6 +286,7 @@ class StemSeparator(
             }
             if (audioTrack < 0 || sourceFormat == null) return null
             source.selectTrack(audioTrack)
+            source.seekTo(windowStartUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val mime = sourceFormat.getString(MediaFormat.KEY_MIME) ?: return null
             var channelCount = sourceFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                 .coerceAtLeast(1)
@@ -279,9 +300,11 @@ class StemSeparator(
             var inputDone = false
             var outputDone = false
             var pcmFloat = false
-            val chunks = ArrayList<FloatArray>(256)
-            var totalFrames = 0
-            while (!outputDone) {
+            val chunks = ArrayList<FloatArray>(64)
+            var collectedFrames = 0
+            var targetFrames = requestedFrames * sampleRate / SAMPLE_RATE + sampleRate
+            while (!outputDone && collectedFrames < targetFrames) {
+                currentCoroutineContext()[Job]?.ensureActive()
                 if (!inputDone) {
                     val inputIndex = codec.dequeueInputBuffer(10_000)
                     if (inputIndex >= 0) {
@@ -307,6 +330,7 @@ class StemSeparator(
                             .coerceAtLeast(1)
                         sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                             .coerceAtLeast(8_000)
+                        targetFrames = requestedFrames * sampleRate / SAMPLE_RATE + sampleRate
                         pcmFloat = runCatching {
                             format.getInteger(MediaFormat.KEY_PCM_ENCODING)
                         }.getOrDefault(AudioFormat.ENCODING_PCM_16BIT) ==
@@ -320,24 +344,45 @@ class StemSeparator(
                             if (buffer != null) {
                                 buffer.position(info.offset)
                                 buffer.limit(info.offset + info.size)
-                                val floats = if (pcmFloat) {
+                                val audio = if (pcmFloat) {
                                     val f = buffer.order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
                                     FloatArray(f.remaining()) { f.get() }
                                 } else {
                                     val s = buffer.order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
                                     FloatArray(s.remaining()) { s.get() / 32768f }
                                 }
-                                val frames = floats.size / channelCount
-                                val stereo = FloatArray(frames * 2)
-                                for (frame in 0 until frames) {
-                                    val base = frame * channelCount
-                                    val left = floats[base]
-                                    val right = if (channelCount > 1) floats[base + 1] else left
-                                    stereo[frame * 2] = left
-                                    stereo[frame * 2 + 1] = right
+                                val bufferFrames = audio.size / channelCount
+                                var skipFrames = 0
+                                if (info.presentationTimeUs >= 0L) {
+                                    val bufferStartUs = info.presentationTimeUs
+                                    val bufferEndUs = bufferStartUs +
+                                        bufferFrames * 1_000_000L / sampleRate
+                                    skipFrames = when {
+                                        bufferEndUs <= windowStartUs -> bufferFrames
+                                        bufferStartUs < windowStartUs ->
+                                            ((windowStartUs - bufferStartUs) * sampleRate /
+                                                1_000_000L).toInt()
+                                        else -> 0
+                                    }.coerceIn(0, bufferFrames)
                                 }
-                                chunks += stereo
-                                totalFrames += frames
+                                val frames = bufferFrames - skipFrames
+                                if (frames > 0) {
+                                    val take = min(frames, targetFrames - collectedFrames)
+                                    if (take > 0) {
+                                        val stereo = FloatArray(take * 2)
+                                        for (frame in 0 until take) {
+                                            val base = (skipFrames + frame) * channelCount
+                                            if (base + channelCount <= audio.size) {
+                                                val left = audio[base]
+                                                val right = if (channelCount > 1) audio[base + 1] else left
+                                                stereo[frame * 2] = left
+                                                stereo[frame * 2 + 1] = right
+                                            }
+                                        }
+                                        chunks += stereo
+                                        collectedFrames += take
+                                    }
+                                }
                             }
                         }
                         codec.releaseOutputBuffer(outputIndex, false)
@@ -347,14 +392,24 @@ class StemSeparator(
                     }
                 }
             }
-            if (totalFrames < SAMPLE_RATE) return null
-            val merged = FloatArray(totalFrames * 2)
+            if (collectedFrames < SAMPLE_RATE / 2) return null
+            val merged = FloatArray(collectedFrames * 2)
             var offset = 0
             for (chunk in chunks) {
-                chunk.copyInto(merged, offset)
-                offset += chunk.size
+                val copy = min(chunk.size, merged.size - offset)
+                chunk.copyInto(merged, offset, 0, copy)
+                offset += copy
             }
-            resampleTo44k(merged, sampleRate)
+            val resampled = resampleTo44k(merged, sampleRate)
+            val result = if (resampled.size / 2 > requestedFrames) {
+                resampled.copyOf(requestedFrames * 2)
+            } else {
+                resampled
+            }
+            Log.d("AutoMix", "stem decode done frames=${result.size / 2} sourceRate=$sampleRate")
+            result
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (error: Exception) {
             Log.w("AutoMix", "stem decode failed: ${error.message}")
             null
@@ -364,7 +419,6 @@ class StemSeparator(
             runCatching { extractor?.release() }
         }
     }
-
     private fun resampleTo44k(input: FloatArray, inputRate: Int): FloatArray {
         if (inputRate == SAMPLE_RATE) return input
         val inputFrames = input.size / 2
@@ -389,6 +443,7 @@ class StemSeparator(
     companion object {
         const val SAMPLE_RATE = 44_100
         const val SEGMENT_SAMPLES = 343_980
+        private const val DECODE_TIMEOUT_MS = 30_000L
         private const val MIN_MODEL_BYTES = 300_000_000L
         private const val MODEL_URL =
             "https://huggingface.co/smank/htdemucs-onnx/resolve/main/htdemucs.onnx?download=true"

@@ -298,6 +298,8 @@ class AutoMixPlaybackManager(
         val currentTrack = current ?: return
         val nextTrack = next ?: return
         val plan = currentPlan() ?: return
+        analysisJob?.cancel()
+        analysisJob = null
         stemJob = scope.launch {
             try {
                 stemPhase = StemPhase.Downloading
@@ -370,6 +372,8 @@ class AutoMixPlaybackManager(
                 publish()
             } finally {
                 stemJob = null
+                stemSeparator.closeSession()
+                if (isStarted) ensureAnalysis()
             }
         }
     }

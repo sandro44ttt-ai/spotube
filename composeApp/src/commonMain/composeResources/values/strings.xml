@@ -260,8 +260,8 @@
     <string name="auto_mix_next">Next</string>
     <string name="auto_mix_transitioning">Mixing...</string>
     <string name="auto_mix_stems">Stems</string>
-    <string name="auto_mix_stems_downloading">Downloading stems %1$d%%</string>
-    <string name="auto_mix_stems_separating">Preparing stems %1$d%%</string>
+    <string name="auto_mix_stems_downloading">Downloading stems %1$d</string>
+    <string name="auto_mix_stems_separating">Preparing stems %1$d</string>
     <string name="auto_mix_stems_ready">Stems ready</string>
     <string name="auto_mix_stems_error">Stems unavailable</string>
     <string name="auto_mix_android_only">Auto Mix is Android-only.</string>
