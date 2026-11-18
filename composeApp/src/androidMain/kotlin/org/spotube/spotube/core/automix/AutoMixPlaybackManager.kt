@@ -317,7 +317,19 @@ class AutoMixPlaybackManager(
                 stemPhase = StemPhase.Separating
                 stemProgress = 0f
                 publish()
-                val settings = settingsProvider.settingsState.value ?: return@launch
+                Log.d(
+                    "AutoMix",
+                    "stem prepare current=${currentTrack.id} next=${nextTrack.id} " +
+                        "cue=${plan.outgoingCueMs}->${plan.incomingCueMs} " +
+                        "duration=${plan.durationMs} tempo=${plan.tempoRatio}"
+                )
+                val settings = settingsProvider.settingsState.value
+                if (settings == null) {
+                    Log.w("AutoMix", "stem prepare settings missing")
+                    stemPhase = StemPhase.Error
+                    publish()
+                    return@launch
+                }
                 val request = StreamRequest(
                     format = settings.streamingMusicFormat,
                     quality = settings.streamingMusicQuality,
@@ -331,16 +343,25 @@ class AutoMixPlaybackManager(
                     track = nextTrack,
                     request = request
                 )
-                if (currentInfo == null || nextInfo == null) {
-                    stemPhase = StemPhase.Error
-                    publish()
-                    return@launch
-                }
+                val proxyPort = settings.playbackProxyServerPort ?: 14769
+                val currentUrl = currentInfo?.url
+                    ?: "http://127.0.0.1:$proxyPort/stream/${currentTrack.id}".also {
+                        Log.w("AutoMix", "stem current stream unresolved, using local proxy")
+                    }
+                val nextUrl = nextInfo?.url
+                    ?: "http://127.0.0.1:$proxyPort/stream/${nextTrack.id}".also {
+                        Log.w("AutoMix", "stem next stream unresolved, using local proxy")
+                    }
+                Log.d(
+                    "AutoMix",
+                    "stem sources current=${if (currentInfo != null) "live" else "proxy"} " +
+                        "next=${if (nextInfo != null) "live" else "proxy"}"
+                )
                 val clip = stemRenderer.render(
                     currentId = currentTrack.id,
-                    currentUrl = currentInfo.url,
+                    currentUrl = currentUrl,
                     nextId = nextTrack.id,
-                    nextUrl = nextInfo.url,
+                    nextUrl = nextUrl,
                     outgoingCueMs = plan.outgoingCueMs,
                     incomingCueMs = plan.incomingCueMs,
                     durationMs = plan.durationMs,
@@ -352,6 +373,7 @@ class AutoMixPlaybackManager(
                     }
                 )
                 if (clip == null) {
+                    Log.w("AutoMix", "stem clip render failed")
                     stemPhase = StemPhase.Error
                     publish()
                     return@launch
