@@ -63,8 +63,8 @@ object AutoMixPlanner {
         val nextBpm = nextFeatures?.bpm ?: 0f
         val beatMs = if (currentBpm > 0f) 60_000f / currentBpm else 500f
         val barMs = beatMs * 4f
-        val currentDuration = current.durationMs.coerceAtLeast(1L)
-        val nextDuration = next.durationMs.coerceAtLeast(1L)
+        val currentDuration = analyzedDurationMs(current, currentFeatures)
+        val nextDuration = analyzedDurationMs(next, nextFeatures)
         val seed = (((current.id + next.id).hashCode() and 0x7FFFFFFF) / 10) % 4
 
         var outgoingCue = outgoingCueMs(currentDuration, currentFeatures, barMs)
@@ -114,7 +114,7 @@ object AutoMixPlanner {
         } else {
             1f
         }
-        val bothLong = current.durationMs > 60_000L && next.durationMs > 60_000L
+        val bothLong = currentDuration > 60_000L && nextDuration > 60_000L
         val fullFeatures = currentFeatures?.analysisComplete == true &&
             nextFeatures?.analysisComplete == true
         val vocalConflict = vocalA > 0.65f && vocalB > 0.65f
@@ -288,6 +288,16 @@ object AutoMixPlanner {
             reason = "safe blend ${bars}b: key $keyDistance, vibe ${(vibeDistance * 100).roundToInt()}%, BPM " +
                 "${currentBpm.roundToInt()}->${nextBpm.roundToInt()}"
         )
+    }
+
+    private fun analyzedDurationMs(track: MetadataTrack, features: AudioFeatures?): Long {
+        val decoded = features?.durationSeconds ?: 0f
+        val duration = if (features?.analysisComplete == true && decoded > 20f) {
+            (decoded * 1000f).toLong()
+        } else {
+            track.durationMs
+        }
+        return duration.coerceAtLeast(1L)
     }
 
     private fun fitTransitionStart(

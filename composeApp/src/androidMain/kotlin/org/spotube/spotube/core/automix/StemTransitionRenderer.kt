@@ -60,6 +60,8 @@ class StemTransitionRenderer(
             startMs = outgoingCueMs,
             frames = frames
         ) { progress -> onProgress(progress * 0.45f) } ?: return@withContext null
+        Log.d("AutoMix", "stem clip current frames=${current.frames}/$frames")
+        if (current.frames < frames * 0.7f) return@withContext null
         onProgress(0.5f)
         Log.d("AutoMix", "stem clip next decode start cue=$incomingCueMs")
         val next = separator.separateWindow(
@@ -68,6 +70,8 @@ class StemTransitionRenderer(
             startMs = incomingCueMs,
             frames = frames
         ) { progress -> onProgress(0.5f + progress * 0.45f) } ?: return@withContext null
+        Log.d("AutoMix", "stem clip next frames=${next.frames}/$frames")
+        if (next.frames < frames * 0.7f) return@withContext null
         onProgress(0.96f)
         val rendered = mix(current, next, frames)
         writeWav(output, rendered, frames)
