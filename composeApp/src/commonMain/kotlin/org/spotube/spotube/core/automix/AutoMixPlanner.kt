@@ -6,6 +6,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+enum class AutoMixLevel { Safe, Mid, Bold }
+
 enum class TransitionKind {
     HardCut,
     SafeBlend,
@@ -39,6 +41,10 @@ data class TransitionPlan(
     val incomingOffsetMs: Long = 0L,
     val loopIn: LoopSpec? = null,
     val bars: Int = 8,
+    val level: AutoMixLevel = AutoMixLevel.Safe,
+    val loopBeats: Int = 0,
+    val loopRoll: Boolean = false,
+    val loopBpm: Float = 0f,
     val reason: String = ""
 )
 
@@ -105,19 +111,58 @@ object AutoMixPlanner {
         val fullFeatures = currentFeatures?.analysisComplete == true &&
             nextFeatures?.analysisComplete == true
         val vocalConflict = vocalA > 0.65f && vocalB > 0.65f
-        val canMashup = bothLong &&
+        val compatibleBase = bothLong &&
             fullFeatures &&
             tempoRatio != null &&
             pitchShift != null &&
             keyDistance <= 1 &&
-            swingDiff <= 0.18f &&
-            energyDistance < 0.45f &&
+            energyDistance < 0.55f &&
             !vocalConflict
+        val absPitch = abs(pitchShift ?: 0)
 
-        if (canMashup) {
-            val bars = if (seed % 3 == 0) 16 else 8
-            val duration = (bars * barMs).coerceIn(16_000f, 36_000f)
+        val level = when {
+            compatibleBase &&
+                swingDiff <= 0.18f &&
+                energyDistance < 0.5f &&
+                (absPitch <= 2) -> AutoMixLevel.Bold
+
+            compatibleBase &&
+                swingDiff <= 0.14f &&
+                absPitch <= 1 -> AutoMixLevel.Mid
+
+            compatibleBase &&
+                swingDiff <= 0.08f &&
+                absPitch == 0 -> AutoMixLevel.Safe
+
+            else -> null
+        }
+
+        if (level != null) {
+            val bars = when (level) {
+                AutoMixLevel.Safe -> 8
+                AutoMixLevel.Mid -> 16
+                AutoMixLevel.Bold -> if (seed % 2 == 0) 16 else 32
+            }
+            val duration = (bars * barMs).coerceIn(
+                if (level == AutoMixLevel.Safe) 12_000f else 16_000f,
+                if (level == AutoMixLevel.Bold) 40_000f else 32_000f
+            )
             val ownerIsA = vocalA < vocalB
+            val loopBeats = when (level) {
+                AutoMixLevel.Safe -> 0
+                AutoMixLevel.Mid -> 8
+                AutoMixLevel.Bold -> 4
+            }
+            val midDip = when (level) {
+                AutoMixLevel.Safe -> 0f
+                AutoMixLevel.Mid -> 4.5f
+                AutoMixLevel.Bold -> 5.5f
+            }
+            val center = when (level) {
+                AutoMixLevel.Safe -> 0f
+                AutoMixLevel.Mid -> 3f
+                AutoMixLevel.Bold -> 4.5f
+            }
             return TransitionPlan(
                 kind = TransitionKind.Mashup,
                 outgoingCueMs = outgoingCue,
@@ -127,21 +172,23 @@ object AutoMixPlanner {
                 pitchSemitones = pitchShift ?: 0,
                 bassSwap = true,
                 bassOwnerIsA = ownerIsA,
-                secondaryHighPassHz = 140f,
-                midDipDb = 4.5f,
-                centerAttenuationDb = 3.5f,
-                headroomDb = -6f,
-                incomingOffsetMs = transientOffsetMs(
-                    currentFeatures,
-                    nextFeatures
-                ),
+                secondaryHighPassHz = if (level == AutoMixLevel.Safe) 110f else 140f,
+                midDipDb = midDip,
+                centerAttenuationDb = center,
+                headroomDb = if (level == AutoMixLevel.Safe) -4f else -6f,
+                incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
                 bars = bars,
-                reason = "mashup ${bars}b: ${currentBpm.roundToInt()}→${nextBpm.roundToInt()} BPM, " +
+                level = level,
+                loopBeats = loopBeats,
+                loopRoll = level == AutoMixLevel.Bold && seed % 2 == 1,
+                loopBpm = nextBpm * (tempoRatio ?: 1f),
+                reason = "mashup ${level.name.lowercase()} ${bars}b: " +
+                    "${currentBpm.roundToInt()}?${nextBpm.roundToInt()} BPM, " +
                     "pitch ${pitchShift ?: 0}, key $keyDistance, " +
-                    "bass ${if (ownerIsA) "A" else "B"}, swing ${(swingDiff * 100).roundToInt()}%"
+                    "bass ${if (ownerIsA) "A" else "B"}, " +
+                    "swing ${(swingDiff * 100).roundToInt()}%"
             )
         }
-
         val canBlend = tempoRatio != null &&
             pitchShift != null &&
             keyDistance <= 1 &&
@@ -150,21 +197,8 @@ object AutoMixPlanner {
             val bars = if (seed % 2 == 0) 8 else 16
             val duration = (bars * barMs).coerceIn(16_000f, 32_000f)
             val ownerIsA = vocalA < vocalB
-            val loop = if (
-                nextFeatures != null &&
-                nextFeatures.vocalness < 0.5f &&
-                bars >= 8
-            ) {
-                val loopStart = incomingCue
-                val loopEnd = loopStart + (4 * barMs).toLong()
-                if (loopEnd < nextDuration) LoopSpec(loopStart, loopEnd, 4) else null
-            } else {
-                null
-            }
             return TransitionPlan(
-                kind = if (loop != null) TransitionKind.LoopBridge else {
-                    if (tempoRatio != null) TransitionKind.TempoBlend else TransitionKind.BeatBlend
-                },
+                kind = if (tempoRatio != null) TransitionKind.TempoBlend else TransitionKind.BeatBlend,
                 outgoingCueMs = outgoingCue,
                 incomingCueMs = incomingCue,
                 durationMs = duration.toLong(),
@@ -177,7 +211,6 @@ object AutoMixPlanner {
                 centerAttenuationDb = if (vocalConflict) 2f else 0f,
                 headroomDb = -5f,
                 incomingOffsetMs = transientOffsetMs(currentFeatures, nextFeatures),
-                loopIn = loop,
                 bars = bars,
                 reason = "blend ${bars}b: ${currentBpm.roundToInt()}→${nextBpm.roundToInt()} BPM, " +
                     "pitch ${pitchShift ?: 0}, key $keyDistance, " +

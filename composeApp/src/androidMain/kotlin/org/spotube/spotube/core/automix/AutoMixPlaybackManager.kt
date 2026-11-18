@@ -358,7 +358,9 @@ class AutoMixPlaybackManager(
         to.seekTo((plan.incomingCueMs + plan.incomingOffsetMs).coerceAtLeast(0L))
         to.volume = 0f
         to.play()
-        plan.loopIn?.let { startLoop(to, it) }
+        if (plan.loopBeats > 0 && plan.loopBpm > 0f) {
+            toDsp.startLoop(plan.loopBpm, plan.loopBeats, plan.loopRoll)
+        }
         val ownerDsp = if (plan.bassOwnerIsA) dspA else dspB
         val secondaryDsp = if (plan.bassOwnerIsA) dspB else dspA
         ownerDsp.highPassHz = 20f
@@ -372,12 +374,17 @@ class AutoMixPlaybackManager(
         toDsp.gain = headroomGain
         transitionJob = scope.launch {
             try {
+            var loopStopped = false
             val steps = (plan.durationMs / 50L).toInt().coerceAtLeast(1)
             for (step in 1..steps) {
                 val t = step.toFloat() / steps.toFloat()
                 transitionProgress = t
                 from.volume = sqrt(1f - t)
                 to.volume = sqrt(t)
+                if (plan.loopBeats > 0 && !loopStopped && t >= 0.5f) {
+                    toDsp.stopLoop()
+                    loopStopped = true
+                }
                 if (t > 0.75f) {
                     toDsp.gain = headroomGain +
                         (1f - headroomGain) * ((t - 0.75f) / 0.25f)
@@ -637,7 +644,14 @@ class AutoMixPlaybackManager(
         for (offset in ordered.indices) {
             queue[start + offset] = ordered[offset]
         }
-        val newNext = queue.getOrNull(start)
+        Log.d(
+            "AutoMix",
+            "queue top: " + ordered.take(5).joinToString(" | ") { track ->
+                val f = features[track.id]
+                "${track.title.take(18)} bpm=${f?.bpm?.roundToInt()} " +
+                    "key=${f?.key} full=${f?.analysisComplete}"
+            }
+        )        val newNext = queue.getOrNull(start)
         if (newNext?.id != next?.id) {
             next = newNext
             newNext?.let { loadTrack(idlePlayer(), it, 0f) }

@@ -28,6 +28,9 @@ class MixDspProcessor : BaseAudioProcessor() {
     @Volatile var midFrequencyHz: Float = 1_500f
     @Volatile var centerAttenuationDb: Float = 0f
     @Volatile var limiterEnabled: Boolean = true
+    @Volatile var loopBpm: Float = 0f
+    @Volatile var loopBeats: Int = 0
+    @Volatile var loopRoll: Boolean = false
 
     private var channels = 2
     private var encoding = AndroidAudioFormat.ENCODING_PCM_16BIT
@@ -39,6 +42,15 @@ class MixDspProcessor : BaseAudioProcessor() {
     private var echoWrite = 0
     private var echoDelaySamples = 0
     private var echoChannelCount = 0
+    private var loopBuffer = FloatArray(0)
+    private var loopFrames = 0
+    private var loopRead = 0
+    private var loopWrite = 0
+    private var loopCapturing = false
+    private var loopActive = false
+    private var loopStopping = false
+    private var loopFadeRemaining = 0
+    private var loopFadeTotal = 1
 
     override fun onConfigure(inputAudioFormat: AudioFormat): AudioFormat {
         if (
@@ -68,7 +80,8 @@ class MixDspProcessor : BaseAudioProcessor() {
             lowPassHz >= 20_000f &&
             echoMix <= 0.001f &&
             midDipDb == 0f &&
-            centerAttenuationDb <= 0.01f
+            centerAttenuationDb <= 0.01f &&
+            !loopActive
         if (neutral) {
             output.put(inputBuffer)
             inputBuffer.position(inputBuffer.limit())
@@ -77,13 +90,16 @@ class MixDspProcessor : BaseAudioProcessor() {
         }
 
         val frameCount = remaining / (channels * bytesPerSample())
+        val raw = FloatArray(channels)
         val frame = FloatArray(channels)
         if (encoding == AndroidAudioFormat.ENCODING_PCM_FLOAT) {
             val input = inputBuffer.order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
             val out = output.asFloatBuffer()
             for (index in 0 until frameCount) {
+                for (channel in 0 until channels) raw[channel] = input.get()
+                applyLoop(raw, frame)
                 for (channel in 0 until channels) {
-                    frame[channel] = processSample(channel, input.get())
+                    frame[channel] = processSample(channel, frame[channel])
                 }
                 applyCenterAttenuation(frame)
                 for (channel in 0 until channels) out.put(limit(frame[channel]))
@@ -92,8 +108,10 @@ class MixDspProcessor : BaseAudioProcessor() {
             val input = inputBuffer.order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
             val out = output.asShortBuffer()
             for (index in 0 until frameCount) {
+                for (channel in 0 until channels) raw[channel] = input.get() / 32768f
+                applyLoop(raw, frame)
                 for (channel in 0 until channels) {
-                    frame[channel] = processSample(channel, input.get() / 32768f)
+                    frame[channel] = processSample(channel, frame[channel])
                 }
                 applyCenterAttenuation(frame)
                 for (channel in 0 until channels) {
@@ -113,6 +131,7 @@ class MixDspProcessor : BaseAudioProcessor() {
         peakFilters.forEach { it.reset() }
         echoBuffer.fill(0f)
         echoWrite = 0
+        resetLoop()
     }
 
     override fun onReset() {
@@ -124,6 +143,14 @@ class MixDspProcessor : BaseAudioProcessor() {
         echoWrite = 0
         echoDelaySamples = 0
         echoChannelCount = 0
+        loopBuffer = FloatArray(0)
+        loopFrames = 0
+        loopRead = 0
+        loopWrite = 0
+        loopCapturing = false
+        loopActive = false
+        loopStopping = false
+        loopFadeRemaining = 0
     }
 
     fun resetEffects() {
@@ -135,6 +162,7 @@ class MixDspProcessor : BaseAudioProcessor() {
         midDipDb = 0f
         centerAttenuationDb = 0f
         limiterEnabled = true
+        resetLoop()
     }
 
     private fun bytesPerSample(): Int =
@@ -148,6 +176,95 @@ class MixDspProcessor : BaseAudioProcessor() {
         echoWrite = 0
     }
 
+    fun startLoop(bpm: Float, beats: Int, roll: Boolean) {
+        if (bpm <= 0f || beats <= 0) return
+        val frames = (lastSampleRate * 60f / bpm * beats)
+            .toInt()
+            .coerceIn(256, lastSampleRate * 20)
+        val needed = frames * channels
+        if (loopBuffer.size < needed) loopBuffer = FloatArray(needed)
+        else loopBuffer.fill(0f, 0, needed)
+        loopFrames = frames
+        loopRead = 0
+        loopWrite = 0
+        loopCapturing = true
+        loopActive = true
+        loopStopping = false
+        loopRoll = roll
+        loopFadeRemaining = 0
+        loopFadeTotal = 1
+    }
+
+    fun stopLoop() {
+        if (!loopActive) return
+        if (loopCapturing) {
+            loopActive = false
+            loopCapturing = false
+            return
+        }
+        loopStopping = true
+        loopFadeTotal = (lastSampleRate * 0.035f).toInt().coerceAtLeast(1)
+        loopFadeRemaining = loopFadeTotal
+    }
+
+    private fun resetLoop() {
+        loopActive = false
+        loopCapturing = false
+        loopStopping = false
+        loopFrames = 0
+        loopRead = 0
+        loopWrite = 0
+        loopFadeRemaining = 0
+    }
+
+    private fun applyLoop(raw: FloatArray, frame: FloatArray) {
+        if (!loopActive) {
+            raw.copyInto(frame)
+            return
+        }
+        if (loopCapturing) {
+            raw.copyInto(frame)
+            val end = loopFrames * channels
+            for (channel in 0 until channels) {
+                if (loopWrite + channel < loopBuffer.size) {
+                    loopBuffer[loopWrite + channel] = raw[channel]
+                }
+            }
+            loopWrite += channels
+            if (loopWrite >= end) {
+                loopCapturing = false
+                loopWrite = 0
+                loopRead = 0
+            }
+            return
+        }
+        val end = loopFrames * channels
+        for (channel in 0 until channels) {
+            frame[channel] = if (loopRead + channel < loopBuffer.size) {
+                loopBuffer[loopRead + channel]
+            } else {
+                0f
+            }
+        }
+        loopRead += channels
+        if (loopRead >= end) {
+            loopRead = 0
+            if (loopRoll && loopFrames > 512) {
+                loopFrames /= 2
+            }
+        }
+        if (loopStopping) {
+            val alpha = loopFadeRemaining.toFloat() / loopFadeTotal.toFloat()
+            for (channel in 0 until channels) {
+                frame[channel] = frame[channel] * alpha + raw[channel] * (1f - alpha)
+            }
+            loopFadeRemaining--
+            if (loopFadeRemaining <= 0) {
+                loopActive = false
+                loopStopping = false
+            }
+        }
+    }
     private fun processSample(channel: Int, input: Float): Float {
         var value = input
         if (highPassHz > 20.1f) {
