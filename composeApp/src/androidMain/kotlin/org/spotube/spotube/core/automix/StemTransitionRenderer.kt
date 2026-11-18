@@ -55,6 +55,7 @@ class StemTransitionRenderer(
         val frames = (durationMs * StemSeparator.SAMPLE_RATE / 1000L).toInt().coerceAtLeast(1)
         Log.d("AutoMix", "stem clip current decode start cue=$outgoingCueMs")
         val current = separator.separateWindow(
+            trackId = currentId,
             url = currentUrl,
             startMs = outgoingCueMs,
             frames = frames
@@ -62,6 +63,7 @@ class StemTransitionRenderer(
         onProgress(0.5f)
         Log.d("AutoMix", "stem clip next decode start cue=$incomingCueMs")
         val next = separator.separateWindow(
+            trackId = nextId,
             url = nextUrl,
             startMs = incomingCueMs,
             frames = frames

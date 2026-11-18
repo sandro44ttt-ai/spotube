@@ -38,7 +38,7 @@ actual val platformModules = module {
     single<AudioPlayerInterface> { AudioPlayer(get<Context>()) }
     single { MixAnalysisCache(get()) }
     single { AudioFeatureAnalyzer(get(), get(), get(), get()) }
-    single { StemSeparator(get(), get()) }
+    single { StemSeparator(get(), get(), get()) }
     single { StemTransitionRenderer(get(), get()) }
     single { AutoMixPlaybackManager(get(), get(), get(), get(), get(), get(), get()) }
     single<LocalMediaDiscoveryService> { AndroidLocalMediaDiscoveryService(get()) }

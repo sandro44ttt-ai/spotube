@@ -29,10 +29,12 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.spotube.spotube.core.network.HttpClientFactory
+import org.spotube.spotube.core.server.CacheManager
 
 class StemSeparator(
     private val context: Context,
-    private val httpClientFactory: HttpClientFactory
+    private val httpClientFactory: HttpClientFactory,
+    private val cacheManager: CacheManager
 ) {
     data class StemWindow(
         val frames: Int,
@@ -130,20 +132,86 @@ class StemSeparator(
     }
 
     suspend fun separateWindow(
+        trackId: String,
         url: String,
         startMs: Long,
         frames: Int,
         onProgress: (Float) -> Unit = {}
     ): StemWindow? = withContext(Dispatchers.IO) {
-        val pcm = withTimeoutOrNull(DECODE_TIMEOUT_MS) {
-            decodeStereoWindow(url, startMs, frames)
-        } ?: run {
-            Log.w("AutoMix", "stem decode timeout for start=${startMs}ms frames=$frames")
-            return@withContext null
+        val source = resolveAudioSource(trackId, url) ?: return@withContext null
+        try {
+            val pcm = withTimeoutOrNull(DECODE_TIMEOUT_MS) {
+                decodeStereoWindow(source.first.absolutePath, startMs, frames)
+            } ?: run {
+                Log.w("AutoMix", "stem decode timeout for start=${startMs}ms frames=$frames")
+                return@withContext null
+            }
+            val available = pcm.size / 2
+            if (available < SAMPLE_RATE * 2) return@withContext null
+            separatePcm(pcm, 0, min(available, frames.coerceAtLeast(1)), onProgress)
+        } finally {
+            if (source.second) source.first.delete()
         }
-        val available = pcm.size / 2
-        if (available < SAMPLE_RATE * 2) return@withContext null
-        separatePcm(pcm, 0, min(available, frames.coerceAtLeast(1)), onProgress)
+    }
+
+    private suspend fun resolveAudioSource(trackId: String, url: String): Pair<File, Boolean>? {
+        val cached = cacheManager.findCachedEntry(trackId)?.first
+        if (cached != null) {
+            val file = File(cached.toString())
+            if (file.exists() && file.length() > 32 * 1024L) {
+                Log.d("AutoMix", "stem decode source cache file=${file.name}")
+                return file to false
+            }
+        }
+        Log.d("AutoMix", "stem decode source download")
+        val temp = File.createTempFile("stem-audio-", ".audio", context.cacheDir)
+        val client = httpClientFactory.create {
+            install(HttpTimeout) {
+                requestTimeoutMillis = 90_000L
+                connectTimeoutMillis = 10_000L
+                socketTimeoutMillis = 30_000L
+            }
+        }
+        val ok = try {
+            withTimeoutOrNull(90_000L) {
+                client.prepareGet(url) {
+                    headers.append(HttpHeaders.UserAgent, "Mozilla/5.0")
+                    headers.append(HttpHeaders.Accept, "*/*")
+                    headers.append(HttpHeaders.Range, "bytes=0-")
+                    headers.append("Accept-Encoding", "identity")
+                }.execute { response ->
+                    if (!response.status.isSuccess()) {
+                        Log.w("AutoMix", "stem audio HTTP ${response.status.value}")
+                        return@execute false
+                    }
+                    var total = 0L
+                    val channel = response.bodyAsChannel()
+                    FileOutputStream(temp).use { output ->
+                        val buffer = ByteArray(128 * 1024)
+                        while (total < MAX_AUDIO_BYTES) {
+                            val read = channel.readAvailable(buffer, 0, buffer.size)
+                            if (read < 0) break
+                            if (read > 0) {
+                                output.write(buffer, 0, read)
+                                total += read
+                            }
+                        }
+                    }
+                    Log.d("AutoMix", "stem audio downloaded bytes=$total")
+                    total > 32 * 1024L
+                }
+            } ?: false
+        } catch (error: Exception) {
+            Log.w("AutoMix", "stem audio download failed: ${error.message}")
+            false
+        } finally {
+            client.close()
+        }
+        if (!ok) {
+            temp.delete()
+            return null
+        }
+        return temp to true
     }
 
     private suspend fun separatePcm(
@@ -444,6 +512,7 @@ class StemSeparator(
         const val SAMPLE_RATE = 44_100
         const val SEGMENT_SAMPLES = 343_980
         private const val DECODE_TIMEOUT_MS = 30_000L
+        private const val MAX_AUDIO_BYTES = 40L * 1024 * 1024
         private const val MIN_MODEL_BYTES = 300_000_000L
         private const val MODEL_URL =
             "https://huggingface.co/smank/htdemucs-onnx/resolve/main/htdemucs.onnx?download=true"
