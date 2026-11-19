@@ -9,6 +9,8 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private const val CLIP_RENDER_VERSION = 2
+
 class StemTransitionRenderer(
     private val context: Context,
     private val separator: StemSeparator
@@ -84,14 +86,14 @@ class StemTransitionRenderer(
         val result = FloatArray(frames * 2)
         for (frame in 0 until frames) {
             val t = frame.toFloat() / frames.toFloat()
-            val currentVocals = 1f - smoothstep(t / 0.15f)
-            val currentDrums = 1f - smoothstep((t - 0.22f) / 0.48f)
-            val currentBass = 1f - smoothstep(t / 0.42f)
-            val currentOther = 1f - smoothstep((t - 0.10f) / 0.55f)
-            val nextDrums = smoothstep((t - 0.01f) / 0.06f)
-            val nextBass = smoothstep((t - 0.01f) / 0.10f)
-            val nextVocals = smoothstep((t - 0.18f) / 0.18f)
-            val nextOther = smoothstep(t / 0.35f)
+            val currentVocals = DjFade.fadeOut(t, 0.25f, 0.45f)
+            val nextVocals = DjFade.fadeIn(t, 0.55f, 0.75f)
+            val currentDrums = DjFade.equalPowerOut(t, 0.10f, 0.90f)
+            val nextDrums = DjFade.equalPowerIn(t, 0.10f, 0.90f)
+            val currentBass = DjFade.fadeOut(t, 0.30f, 0.50f)
+            val nextBass = DjFade.fadeIn(t, 0.50f, 0.70f)
+            val currentOther = DjFade.equalPowerOut(t, 0.20f, 0.85f)
+            val nextOther = DjFade.equalPowerIn(t, 0.20f, 0.85f)
             for (channel in 0..1) {
                 val index = frame * 2 + channel
                 var sample = 0f
@@ -151,15 +153,10 @@ class StemTransitionRenderer(
         tempoRatio: Float,
         pitchSemitones: Int
     ): File {
-        val key = "$currentId|$nextId|$outgoingCueMs|$incomingCueMs|$durationMs|" +
-            "${(tempoRatio * 1000).roundToInt()}|$pitchSemitones"
+        val key = "$CLIP_RENDER_VERSION|$currentId|$nextId|$outgoingCueMs|$incomingCueMs|" +
+            "$durationMs|${(tempoRatio * 1000).roundToInt()}|$pitchSemitones"
         val hash = key.hashCode().toUInt().toString(16)
         return File(clipDir, "clip-$hash.wav")
-    }
-
-    private fun smoothstep(value: Float): Float {
-        val x = value.coerceIn(0f, 1f)
-        return x * x * (3f - 2f * x)
     }
 
     private fun softClip(value: Float): Float {

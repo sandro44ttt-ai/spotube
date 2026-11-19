@@ -154,12 +154,12 @@ object AutoMixPlanner {
 
         if (level != null) {
             val bars = when (level) {
-                AutoMixLevel.Safe -> 8
+                AutoMixLevel.Safe -> 16
                 AutoMixLevel.Mid -> 16
-                AutoMixLevel.Bold -> if (seed % 2 == 0) 16 else 32
+                AutoMixLevel.Bold -> if (seed % 2 == 0) 16 else 24
             }
             val duration = (bars * barMs).coerceIn(
-                if (level == AutoMixLevel.Safe) 12_000f else 16_000f,
+                16_000f,
                 if (level == AutoMixLevel.Bold) 40_000f else 32_000f
             ).coerceAtMost((currentDuration - 6_000L).toFloat().coerceAtLeast(8_000f))
             val durationMs = duration.toLong()
@@ -236,7 +236,7 @@ object AutoMixPlanner {
             bpmConfidence >= 0.4f &&
             energyDistance < 0.65f
         if (canBlend) {
-            val bars = if (seed % 2 == 0) 8 else 16
+            val bars = if (seed % 2 == 0) 16 else 24
             val duration = (bars * barMs).coerceIn(16_000f, 32_000f)
                 .coerceAtMost((currentDuration - 6_000L).toFloat().coerceAtLeast(8_000f))
             val durationMs = duration.toLong()
@@ -264,8 +264,8 @@ object AutoMixPlanner {
             )
         }
 
-        val bars = 8
-        val durationMs = (bars * barMs).coerceIn(12_000f, 24_000f)
+        val bars = 16
+        val durationMs = (bars * barMs).coerceIn(16_000f, 24_000f)
             .coerceAtMost((currentDuration - 6_000L).toFloat().coerceAtLeast(8_000f))
             .toLong()
         return TransitionPlan(

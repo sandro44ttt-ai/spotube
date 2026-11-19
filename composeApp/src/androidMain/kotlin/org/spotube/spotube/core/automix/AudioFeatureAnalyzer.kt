@@ -28,6 +28,11 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+private data class MonoAudio(
+    val samples: FloatArray,
+    val sampleRate: Int
+)
+
 class AudioFeatureAnalyzer(
     private val context: Context,
     private val cache: MixAnalysisCache,
@@ -52,12 +57,12 @@ class AudioFeatureAnalyzer(
                 }
             }
             val file = downloadTrack(url) ?: return@withContext null
-            val samples = try {
+            val decoded = try {
                 decodeMono(file.absolutePath, if (fullTrack) MAX_ANALYSIS_SECONDS else LIGHT_ANALYSIS_SECONDS)
             } finally {
                 file.delete()
             } ?: return@withContext null
-            val features = computeFeatures(samples, ANALYSIS_SAMPLE_RATE, fullTrack)
+            val features = computeFeatures(decoded.samples, decoded.sampleRate, fullTrack)
                 ?: return@withContext null
             val stamped = features.copy(
                 analysisComplete = fullTrack,
@@ -125,7 +130,7 @@ class AudioFeatureAnalyzer(
             client.close()
         }
     }
-    private fun decodeMono(url: String, maxSeconds: Long): FloatArray? {
+    private fun decodeMono(url: String, maxSeconds: Long): MonoAudio? {
         var extractor: MediaExtractor? = null
         var decoder: MediaCodec? = null
         return try {
@@ -151,14 +156,15 @@ class AudioFeatureAnalyzer(
             var sampleRate = sourceFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 .coerceAtLeast(8_000)
             var decimation = (sampleRate / ANALYSIS_SAMPLE_RATE).coerceAtLeast(1)
+            var analysisRate = (sampleRate / decimation).coerceAtLeast(1)
 
             val codec = MediaCodec.createDecoderByType(mime)
             decoder = codec
             codec.configure(sourceFormat, null, null, 0)
             codec.start()
 
-            val maxSamples = (ANALYSIS_SAMPLE_RATE.toLong() * maxSeconds).toInt()
-            val output = FloatArray(maxSamples)
+            var maxSamples = (analysisRate.toLong() * maxSeconds).toInt()
+            var output = FloatArray(maxSamples)
             var outputSize = 0
             var frameCounter = 0
             val info = MediaCodec.BufferInfo()
@@ -202,6 +208,16 @@ class AudioFeatureAnalyzer(
                         sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                             .coerceAtLeast(8_000)
                         decimation = (sampleRate / ANALYSIS_SAMPLE_RATE).coerceAtLeast(1)
+                        analysisRate = (sampleRate / decimation).coerceAtLeast(1)
+                        maxSamples = (analysisRate.toLong() * maxSeconds).toInt()
+                        if (maxSamples > output.size) {
+                            output = output.copyOf(maxSamples)
+                        }
+                        Log.d(
+                            "AutoMix",
+                            "analysis decode sourceRate=$sampleRate " +
+                                "effectiveRate=$analysisRate decimation=$decimation"
+                        )
                         pcmFloat = runCatching {
                             format.getInteger(MediaFormat.KEY_PCM_ENCODING)
                         }.getOrDefault(AudioFormat.ENCODING_PCM_16BIT) ==
@@ -254,8 +270,8 @@ class AudioFeatureAnalyzer(
                     }
                 }
             }
-            if (outputSize < ANALYSIS_SAMPLE_RATE * 10) return null
-            output.copyOf(outputSize)
+            if (outputSize < analysisRate * 10) return null
+            MonoAudio(output.copyOf(outputSize), analysisRate)
         } catch (error: Exception) {
             Log.w("AutoMix", "analysis decode failed: ${error.message}")
             null

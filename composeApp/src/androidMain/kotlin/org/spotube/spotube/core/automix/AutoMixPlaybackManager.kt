@@ -37,7 +37,6 @@ import org.spotube.spotube.modules.settings.SettingsProvider
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 import kotlin.random.Random
 
 class AutoMixPlaybackManager(
@@ -544,8 +543,8 @@ class AutoMixPlaybackManager(
         if (plan.loopBeats > 0 && plan.loopBpm > 0f) {
             toDsp.startLoop(plan.loopBpm, plan.loopBeats, plan.loopRoll)
         }
-        val ownerDsp = if (plan.bassOwnerIsA) dspA else dspB
-        val secondaryDsp = if (plan.bassOwnerIsA) dspB else dspA
+        val ownerDsp = if (plan.bassOwnerIsA) fromDsp else toDsp
+        val secondaryDsp = if (plan.bassOwnerIsA) toDsp else fromDsp
         ownerDsp.highPassHz = 20f
         ownerDsp.midDipDb = plan.midDipDb
         ownerDsp.centerAttenuationDb = plan.centerAttenuationDb
@@ -575,8 +574,8 @@ class AutoMixPlaybackManager(
                 }
                 val t = step.toFloat() / steps.toFloat()
                 transitionProgress = t
-                from.volume = sqrt(1f - t)
-                to.volume = sqrt(t)
+                from.volume = DjFade.equalPowerOut(t)
+                to.volume = DjFade.equalPowerIn(t)
                 if (plan.loopBeats > 0 && !loopStopped && t >= 0.5f) {
                     toDsp.stopLoop()
                     loopStopped = true
@@ -585,9 +584,17 @@ class AutoMixPlaybackManager(
                     toDsp.gain = headroomGain +
                         (1f - headroomGain) * ((t - 0.35f) / 0.55f).coerceIn(0f, 1f)
                 }
-                if (plan.kind == TransitionKind.SafeBlend) {
-                    secondaryDsp.lowPassHz = 20_000f - 12_000f * t * t
-                }
+                val flippedBass = plan.bassSwap && t >= 0.5f
+                val fromOwnsBass = if (flippedBass) !plan.bassOwnerIsA else plan.bassOwnerIsA
+                val toOwnsBass = !fromOwnsBass
+                val incomingHighPass =
+                    20f + 380f * (1f - DjFade.smoothstep(DjFade.window(t, 0f, 0.45f)))
+                fromDsp.highPassHz =
+                    if (fromOwnsBass) 20f else plan.secondaryHighPassHz
+                fromDsp.lowPassHz =
+                    20_000f - 18_000f * DjFade.smoothstep(DjFade.window(t, 0.30f, 1f))
+                toDsp.highPassHz =
+                    if (toOwnsBass) 20f else incomingHighPass
                 if (t > 0.72f) {
                     fromDsp.echoMix = ((t - 0.72f) / 0.28f).coerceIn(0f, 1f) * 0.2f
                     fromDsp.echoFeedback = 0.18f
@@ -684,13 +691,19 @@ class AutoMixPlaybackManager(
             try {
                 val wallDurationMs = (clipDurationMs / plan.tempoRatio.coerceAtLeast(0.1f)).toLong()
                 val steps = (wallDurationMs / 50L).toInt().coerceAtLeast(1)
+                val handoffMs = (wallDurationMs / 4L).coerceAtMost(2_000L)
+                val handoffStart = if (wallDurationMs > 0L) {
+                    (1f - handoffMs.toFloat() / wallDurationMs.toFloat()).coerceIn(0.75f, 0.98f)
+                } else {
+                    0.90f
+                }
                 for (step in 1..steps) {
                     val t = step.toFloat() / steps.toFloat()
                     transitionProgress = t
-                    if (t > 0.90f) {
-                        val fade = ((t - 0.90f) / 0.10f).coerceIn(0f, 1f)
-                        clipDeck.volume = 1f - fade
-                        to.volume = fade
+                    if (t > handoffStart) {
+                        val fade = ((t - handoffStart) / (1f - handoffStart)).coerceIn(0f, 1f)
+                        clipDeck.volume = DjFade.equalPowerOut(fade)
+                        to.volume = DjFade.equalPowerIn(fade)
                     }
                     if (step % 2 == 0 || step == steps) publish()
                     delay(50)
