@@ -84,13 +84,13 @@ class StemTransitionRenderer(
         val result = FloatArray(frames * 2)
         for (frame in 0 until frames) {
             val t = frame.toFloat() / frames.toFloat()
-            val currentVocals = 1f - smoothstep(t / 0.22f)
+            val currentVocals = 1f - smoothstep(t / 0.15f)
             val currentDrums = 1f - smoothstep((t - 0.22f) / 0.48f)
             val currentBass = 1f - smoothstep(t / 0.42f)
             val currentOther = 1f - smoothstep((t - 0.10f) / 0.55f)
             val nextDrums = smoothstep((t - 0.01f) / 0.06f)
             val nextBass = smoothstep((t - 0.01f) / 0.10f)
-            val nextVocals = smoothstep((t - 0.08f) / 0.18f)
+            val nextVocals = smoothstep((t - 0.18f) / 0.18f)
             val nextOther = smoothstep(t / 0.35f)
             for (channel in 0..1) {
                 val index = frame * 2 + channel

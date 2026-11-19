@@ -40,7 +40,7 @@ actual val platformModules = module {
     single { AudioFeatureAnalyzer(get(), get(), get(), get()) }
     single { StemSeparator(get(), get(), get()) }
     single { StemTransitionRenderer(get(), get()) }
-    single { AutoMixPlaybackManager(get(), get(), get(), get(), get(), get(), get()) }
+    single { AutoMixPlaybackManager(get(), get(), get(), get(), get(), get()) }
     single<LocalMediaDiscoveryService> { AndroidLocalMediaDiscoveryService(get()) }
     single<ShareService> { AndroidShareService(get()) }
     single {
