@@ -9,7 +9,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private const val CLIP_RENDER_VERSION = 3
+private const val CLIP_RENDER_VERSION = 4
 
 class StemTransitionRenderer(
     private val context: Context,
@@ -24,9 +24,19 @@ class StemTransitionRenderer(
         incomingCueMs: Long,
         durationMs: Long,
         tempoRatio: Float,
-        pitchSemitones: Int
+        pitchSemitones: Int,
+        role: MashupRole
     ): File? {
-        val file = clipFile(currentId, nextId, outgoingCueMs, incomingCueMs, durationMs, tempoRatio, pitchSemitones)
+        val file = clipFile(
+            currentId,
+            nextId,
+            outgoingCueMs,
+            incomingCueMs,
+            durationMs,
+            tempoRatio,
+            pitchSemitones,
+            role
+        )
         return file.takeIf { it.exists() && it.length() > 44L }
     }
 
@@ -40,6 +50,7 @@ class StemTransitionRenderer(
         durationMs: Long,
         tempoRatio: Float,
         pitchSemitones: Int,
+        role: MashupRole,
         onProgress: (Float) -> Unit = {}
     ): File? = withContext(Dispatchers.IO) {
         if (durationMs < 4_000L) return@withContext null
@@ -51,7 +62,8 @@ class StemTransitionRenderer(
             incomingCueMs,
             durationMs,
             tempoRatio,
-            pitchSemitones
+            pitchSemitones,
+            role
         )
         if (output.exists() && output.length() > 44L) return@withContext output
         val frames = (durationMs * StemSeparator.SAMPLE_RATE / 1000L).toInt().coerceAtLeast(1)
@@ -75,28 +87,55 @@ class StemTransitionRenderer(
         Log.d("AutoMix", "stem clip next frames=${next.frames}/$frames")
         if (next.frames < frames * 0.7f) return@withContext null
         onProgress(0.96f)
-        val rendered = mix(current, next, frames)
+        val rendered = mix(current, next, frames, role)
         writeWav(output, rendered, frames)
         Log.d("AutoMix", "stem clip rendered ${output.name} bytes=${output.length()}")
         onProgress(1f)
         output
     }
 
-    private fun mix(current: StemSeparator.StemWindow, next: StemSeparator.StemWindow, frames: Int): ShortArray {
+    private fun mix(
+        current: StemSeparator.StemWindow,
+        next: StemSeparator.StemWindow,
+        frames: Int,
+        role: MashupRole
+    ): ShortArray {
         val result = FloatArray(frames * 2)
         for (frame in 0 until frames) {
             val t = frame.toFloat() / frames.toFloat()
-            val currentVocals = DjFade.fadeOut(t, 0.25f, 0.45f)
-            val nextVocals = DjFade.fadeIn(t, 0.55f, 0.75f)
-            val currentInstrumental = DjFade.equalPowerOut(t, 0.10f, 0.90f)
-            val nextInstrumental = DjFade.equalPowerIn(t, 0.10f, 0.90f)
+            val gains = when (role) {
+                MashupRole.AInstrumentalBVocals -> floatArrayOf(
+                    1f - DjFade.smoothstep(DjFade.window(t, 0.82f, 1f)),
+                    DjFade.fadeOut(t, 0f, 0.12f),
+                    DjFade.fadeIn(t, 0.82f, 1f),
+                    DjFade.fadeIn(t, 0.12f, 0.32f)
+                )
+                MashupRole.BInstrumentalAVocals -> floatArrayOf(
+                    0f,
+                    DjFade.fadeOut(t, 0.20f, 0.42f),
+                    1f,
+                    0f
+                )
+                MashupRole.InstrumentalCrossfade -> floatArrayOf(
+                    DjFade.equalPowerOut(t, 0.12f, 0.88f),
+                    0f,
+                    DjFade.equalPowerIn(t, 0.12f, 0.88f),
+                    0f
+                )
+                MashupRole.None -> floatArrayOf(
+                    DjFade.equalPowerOut(t, 0.10f, 0.90f),
+                    DjFade.fadeOut(t, 0.20f, 0.42f),
+                    DjFade.equalPowerIn(t, 0.10f, 0.90f),
+                    DjFade.fadeIn(t, 0.55f, 0.75f)
+                )
+            }
             for (channel in 0..1) {
                 val index = frame * 2 + channel
                 var sample = 0f
-                sample += current.instrumental.getOrElse(index) { 0f } * currentInstrumental
-                sample += current.vocals.getOrElse(index) { 0f } * currentVocals
-                sample += next.instrumental.getOrElse(index) { 0f } * nextInstrumental
-                sample += next.vocals.getOrElse(index) { 0f } * nextVocals
+                sample += current.instrumental.getOrElse(index) { 0f } * gains[0]
+                sample += current.vocals.getOrElse(index) { 0f } * gains[1]
+                sample += next.instrumental.getOrElse(index) { 0f } * gains[2]
+                sample += next.vocals.getOrElse(index) { 0f } * gains[3]
                 result[index] = softClip(sample)
             }
         }
@@ -143,10 +182,11 @@ class StemTransitionRenderer(
         incomingCueMs: Long,
         durationMs: Long,
         tempoRatio: Float,
-        pitchSemitones: Int
+        pitchSemitones: Int,
+        role: MashupRole
     ): File {
         val key = "$CLIP_RENDER_VERSION|$currentId|$nextId|$outgoingCueMs|$incomingCueMs|" +
-            "$durationMs|${(tempoRatio * 1000).roundToInt()}|$pitchSemitones"
+            "$durationMs|${(tempoRatio * 1000).roundToInt()}|$pitchSemitones|${role.name}"
         val hash = key.hashCode().toUInt().toString(16)
         return File(clipDir, "clip-$hash.wav")
     }

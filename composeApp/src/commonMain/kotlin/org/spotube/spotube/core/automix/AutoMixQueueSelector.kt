@@ -76,7 +76,9 @@ object AutoMixQueueSelector {
             0.5f
         }
         if (directBpmDistance > 0.10f) score += 90f
-        score += keyDistance(currentKey, candidateKey) * 16f
+        val harmonicDistance = keyDistance(currentKey, candidateKey)
+        score += harmonicDistance * 16f
+        if (harmonicDistance > 1) score += 350f
         score += abs(shift) * 10f
         val targetEnergy = (currentFeatures.energy + 0.04f).coerceIn(0.15f, 0.95f)
         score += abs(targetEnergy - candidateFeatures.energy) * 18f

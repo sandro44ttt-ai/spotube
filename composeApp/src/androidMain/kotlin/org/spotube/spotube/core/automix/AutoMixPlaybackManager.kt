@@ -34,6 +34,7 @@ import org.spotube.spotube.core.server.StreamTrackRegistry
 import org.spotube.spotube.core.server.StreamingUrlRepository
 import org.spotube.spotube.media.AutoMixForegroundService
 import org.spotube.spotube.modules.settings.SettingsProvider
+import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -366,6 +367,8 @@ class AutoMixPlaybackManager(
         val nextTrack = next ?: return
         val plan = currentPlan() ?: return
         if (plan.kind == TransitionKind.HardCut) return
+        if (plan.pitchSemitones != 0) return
+        if (abs(plan.tempoRatio - 1f) > 0.03f) return
         if (clipPreparedFile != null && stemAutoPairKey == currentTrack.id + "|" + nextTrack.id) {
             return
         }
@@ -442,6 +445,7 @@ class AutoMixPlaybackManager(
                         durationMs = plan.durationMs,
                         tempoRatio = plan.tempoRatio,
                         pitchSemitones = plan.pitchSemitones,
+                        role = plan.mashupRole,
                         onProgress = { progress ->
                             stemProgress = progress
                             _state.update {
@@ -492,7 +496,9 @@ class AutoMixPlaybackManager(
         }
         val currentTrack = current ?: return
         val nextTrack = next ?: return
-        if (currentPlan()?.kind == TransitionKind.HardCut) return
+        val plan = currentPlan() ?: return
+        if (plan.kind == TransitionKind.HardCut || plan.pitchSemitones != 0) return
+        if (abs(plan.tempoRatio - 1f) > 0.03f) return
         if (features[currentTrack.id]?.analysisComplete != true ||
             features[nextTrack.id]?.analysisComplete != true
         ) {
@@ -650,7 +656,8 @@ class AutoMixPlaybackManager(
             incomingCueMs = plan.incomingCueMs,
             durationMs = plan.durationMs,
             tempoRatio = plan.tempoRatio,
-            pitchSemitones = plan.pitchSemitones
+            pitchSemitones = plan.pitchSemitones,
+            role = plan.mashupRole
         )
         val clipOffsetMs = (from.currentPosition - plan.outgoingCueMs).coerceAtLeast(0L)
         if (
@@ -680,17 +687,6 @@ class AutoMixPlaybackManager(
         to.seekTo((plan.incomingCueMs + plan.incomingOffsetMs).coerceAtLeast(0L))
         to.volume = 0f
         to.play()
-        if (plan.loopBeats > 0 && plan.loopBpm > 0f) {
-            toDsp.startLoop(plan.loopBpm, plan.loopBeats, plan.loopRoll)
-        }
-        val ownerDsp = if (plan.bassOwnerIsA) fromDsp else toDsp
-        val secondaryDsp = if (plan.bassOwnerIsA) toDsp else fromDsp
-        ownerDsp.highPassHz = 20f
-        ownerDsp.midDipDb = plan.midDipDb
-        ownerDsp.centerAttenuationDb = plan.centerAttenuationDb
-        secondaryDsp.highPassHz = plan.secondaryHighPassHz
-        secondaryDsp.midDipDb = 0f
-        secondaryDsp.centerAttenuationDb = 0f
         val headroomGain = 10.0.pow(plan.headroomDb / 20.0).toFloat()
         fromDsp.gain = 1f
         toDsp.gain = headroomGain
@@ -704,7 +700,6 @@ class AutoMixPlaybackManager(
         )
         transitionJob = scope.launch {
             try {
-            var loopStopped = false
             val steps = (effectiveDurationMs / 50L).toInt().coerceAtLeast(1)
             for (step in 1..steps) {
                 if (from.playbackState == Player.STATE_ENDED) {
@@ -716,28 +711,9 @@ class AutoMixPlaybackManager(
                 transitionProgress = t
                 from.volume = DjFade.equalPowerOut(t)
                 to.volume = DjFade.equalPowerIn(t)
-                if (plan.loopBeats > 0 && !loopStopped && t >= 0.5f) {
-                    toDsp.stopLoop()
-                    loopStopped = true
-                }
                 if (t > 0.35f) {
                     toDsp.gain = headroomGain +
                         (1f - headroomGain) * ((t - 0.35f) / 0.55f).coerceIn(0f, 1f)
-                }
-                val flippedBass = plan.bassSwap && t >= 0.5f
-                val fromOwnsBass = if (flippedBass) !plan.bassOwnerIsA else plan.bassOwnerIsA
-                val toOwnsBass = !fromOwnsBass
-                val incomingHighPass =
-                    20f + 380f * (1f - DjFade.smoothstep(DjFade.window(t, 0f, 0.45f)))
-                fromDsp.highPassHz =
-                    if (fromOwnsBass) 20f else plan.secondaryHighPassHz
-                fromDsp.lowPassHz =
-                    20_000f - 18_000f * DjFade.smoothstep(DjFade.window(t, 0.30f, 1f))
-                toDsp.highPassHz =
-                    if (toOwnsBass) 20f else incomingHighPass
-                if (t > 0.72f) {
-                    fromDsp.echoMix = ((t - 0.72f) / 0.28f).coerceIn(0f, 1f) * 0.2f
-                    fromDsp.echoFeedback = 0.18f
                 }
                 val ramp = (t * 4f).coerceAtMost(1f)
                 val speed = 1f + (plan.tempoRatio - 1f) * ramp
@@ -1055,7 +1031,8 @@ class AutoMixPlaybackManager(
             currentFeatures = features[currentTrack.id],
             nextFeatures = features[nextTrack.id],
             activeTempo = activeSpeed,
-            currentPitchSemitones = activePitchSemitones
+            currentPitchSemitones = activePitchSemitones,
+            currentPositionMs = positionMs
         )
     }
 
