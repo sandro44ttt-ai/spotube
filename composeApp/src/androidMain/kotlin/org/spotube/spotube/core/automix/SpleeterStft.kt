@@ -44,26 +44,29 @@ internal object SpleeterStft {
     }
 
     fun istft(
-        real: Array<FloatArray>,
-        imag: Array<FloatArray>,
-        frames: Int,
-        outputLength: Int
+        spectrum: Spectrum,
+        outputLength: Int,
+        mask: (frame: Int, bin: Int) -> Float
     ): FloatArray {
-        val fullLength = (frames - 1) * HOP + N_FFT
-        val output = FloatArray(fullLength)
-        val weights = FloatArray(fullLength)
+        val length = outputLength.coerceAtLeast(1)
+        val output = FloatArray(length)
+        val weights = FloatArray(length)
         val frameReal = FloatArray(N_FFT)
         val frameImag = FloatArray(N_FFT)
-        for (frame in 0 until frames) {
+        for (frame in 0 until spectrum.frames) {
             frameReal.fill(0f)
             frameImag.fill(0f)
             for (bin in 0 until BINS) {
-                frameReal[bin] = real[frame][bin]
-                frameImag[bin] = imag[frame][bin]
-            }
-            for (bin in 1 until N_FFT / 2) {
-                frameReal[N_FFT - bin] = real[frame][bin]
-                frameImag[N_FFT - bin] = -imag[frame][bin]
+                val weight = mask(frame, bin)
+                if (weight == 0f) continue
+                val real = spectrum.real[frame][bin] * weight
+                val imag = spectrum.imag[frame][bin] * weight
+                frameReal[bin] = real
+                frameImag[bin] = imag
+                if (bin in 1 until N_FFT / 2) {
+                    frameReal[N_FFT - bin] = real
+                    frameImag[N_FFT - bin] = -imag
+                }
             }
             frameImag[0] = 0f
             frameImag[N_FFT / 2] = 0f
@@ -71,6 +74,7 @@ internal object SpleeterStft {
             val start = frame * HOP
             for (index in 0 until N_FFT) {
                 val target = start + index
+                if (target >= length) break
                 output[target] += frameReal[index] * window[index]
                 weights[target] += window[index] * window[index]
             }
@@ -78,12 +82,7 @@ internal object SpleeterStft {
         for (index in output.indices) {
             if (weights[index] > 1e-8f) output[index] /= weights[index]
         }
-        val result = FloatArray(outputLength.coerceAtLeast(1))
-        val copyLength = minOf(result.size, output.size)
-        for (index in 0 until copyLength) {
-            result[index] = output[index]
-        }
-        return result
+        return output
     }
 
     private fun fft(real: FloatArray, imag: FloatArray, inverse: Boolean) {

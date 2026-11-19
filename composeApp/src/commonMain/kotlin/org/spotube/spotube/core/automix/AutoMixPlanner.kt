@@ -195,7 +195,7 @@ object AutoMixPlanner {
             }
             val duration = (bars * barMs).coerceIn(
                 16_000f,
-                if (level == AutoMixLevel.Bold) 40_000f else 32_000f
+                24_000f
             ).coerceAtMost((currentDuration - 6_000L).toFloat().coerceAtLeast(8_000f))
             val durationMs = duration.toLong()
             val early = if (vibeDistance <= 0.30f) {
@@ -272,7 +272,7 @@ object AutoMixPlanner {
             energyDistance < 0.65f
         if (canBlend) {
             val bars = if (seed % 2 == 0) 16 else 24
-            val duration = (bars * barMs).coerceIn(16_000f, 32_000f)
+            val duration = (bars * barMs).coerceIn(16_000f, 24_000f)
                 .coerceAtMost((currentDuration - 6_000L).toFloat().coerceAtLeast(8_000f))
             val durationMs = duration.toLong()
             val startCue = fitTransitionStart(outgoingCue, currentDuration, durationMs)

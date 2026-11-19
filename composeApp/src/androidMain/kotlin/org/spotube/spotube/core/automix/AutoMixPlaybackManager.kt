@@ -132,6 +132,7 @@ class AutoMixPlaybackManager(
     private var stemJob: Job? = null
     private var stemAutoJob: Job? = null
     private var stemAutoPairKey: String? = null
+    @Volatile private var stemInProgress = false
     private var nextLocked: Boolean = false
     private var stemPhase: StemPhase = StemPhase.Idle
     private var stemProgress: Float = 0f
@@ -189,6 +190,7 @@ class AutoMixPlaybackManager(
     private fun cancelStemWork() {
         stemJob?.cancel()
         stemJob = null
+        stemInProgress = false
         stemAutoJob?.cancel()
         stemAutoJob = null
         stemAutoPairKey = null
@@ -260,6 +262,7 @@ class AutoMixPlaybackManager(
         clipPreparedFile = null
         clipTransitioning = false
         nextLocked = false
+        stemInProgress = false
         stemAutoPairKey = null
         stemAutoJob?.cancel()
         stemAutoJob = null
@@ -308,6 +311,7 @@ class AutoMixPlaybackManager(
         loopJob?.cancel()
         stemJob?.cancel()
         stemJob = null
+        stemInProgress = false
         stemAutoJob?.cancel()
         stemAutoJob = null
         stemAutoPairKey = null
@@ -355,13 +359,18 @@ class AutoMixPlaybackManager(
         publish()
     }
 
+    @Synchronized
     fun prepareStems() {
-        if (stemJob?.isActive == true) return
+        if (stemInProgress || stemJob?.isActive == true) return
         val currentTrack = current ?: return
         val nextTrack = next ?: return
         val plan = currentPlan() ?: return
         if (plan.kind == TransitionKind.HardCut) return
+        if (clipPreparedFile != null && stemAutoPairKey == currentTrack.id + "|" + nextTrack.id) {
+            return
+        }
         nextLocked = true
+        stemInProgress = true
         stemAutoPairKey = currentTrack.id + "|" + nextTrack.id
         analysisJob?.cancel()
         analysisJob = null
@@ -457,12 +466,18 @@ class AutoMixPlaybackManager(
                 publish()
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: OutOfMemoryError) {
+                Log.w("AutoMix", "stem preparation OOM: ${e.message}")
+                lastError = "stems OOM"
+                stemPhase = StemPhase.Error
+                publish()
             } catch (e: Exception) {
                 Log.w("AutoMix", "stem preparation failed: ${e.message}")
                 stemPhase = StemPhase.Error
                 publish()
             } finally {
                 stemJob = null
+                stemInProgress = false
                 if (stemPhase != StemPhase.Ready) nextLocked = false
                 stemSeparator.closeSession()
                 if (isStarted) ensureAnalysis()
@@ -472,7 +487,7 @@ class AutoMixPlaybackManager(
 
     private fun scheduleStemAutoPrepare() {
         if (!stemSeparator.modelReady()) return
-        if (!isStarted || isTransitioning || stemJob?.isActive == true || clipPreparedFile != null) {
+        if (!isStarted || isTransitioning || stemInProgress || stemJob?.isActive == true || clipPreparedFile != null) {
             return
         }
         val currentTrack = current ?: return
@@ -1103,7 +1118,7 @@ class AutoMixPlaybackManager(
 
     private fun ensureAnalysis() {
         if (!localAnalysisEnabled) return
-        if (!isStarted || stemJob?.isActive == true || analysisJob?.isActive == true) return
+        if (!isStarted || stemInProgress || stemJob?.isActive == true || analysisJob?.isActive == true) return
         analysisJob = scope.launch {
             try {
                 val settings = settingsProvider.settingsState.value ?: return@launch

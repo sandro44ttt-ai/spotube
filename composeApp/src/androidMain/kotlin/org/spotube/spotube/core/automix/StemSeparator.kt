@@ -384,28 +384,23 @@ class StemSeparator(
     ): FloatArray {
         val splitSize = SpleeterStft.FRAMES_PER_SPLIT
         val bins = SpleeterStft.MODEL_BINS
-        val real = Array(spectrum.frames) { FloatArray(SpleeterStft.BINS) }
-        val imag = Array(spectrum.frames) { FloatArray(SpleeterStft.BINS) }
-        for (split in 0 until splitCount) {
-            for (frameInSplit in 0 until splitSize) {
-                val frame = split * splitSize + frameInSplit
-                if (frame >= spectrum.frames) continue
+        return SpleeterStft.istft(spectrum, outputFrames) { frame, bin ->
+            if (bin >= bins) {
+                0f
+            } else {
+                val split = frame / splitSize
+                val frameInSplit = frame % splitSize
                 val sourceBase = ((channel * splitCount + split) * splitSize + frameInSplit) * bins
-                for (bin in 0 until bins) {
-                    val vocal = vocalsOutput.getOrElse(sourceBase + bin) { 0f }
-                    val accompaniment = accompanimentOutput.getOrElse(sourceBase + bin) { 0f }
-                    val denominator = vocal * vocal + accompaniment * accompaniment + 1e-10f
-                    val weight = if (vocals) {
-                        (vocal * vocal + 5e-11f) / denominator
-                    } else {
-                        (accompaniment * accompaniment + 5e-11f) / denominator
-                    }
-                    real[frame][bin] = spectrum.real[frame][bin] * weight
-                    imag[frame][bin] = spectrum.imag[frame][bin] * weight
+                val vocal = vocalsOutput.getOrElse(sourceBase + bin) { 0f }
+                val accompaniment = accompanimentOutput.getOrElse(sourceBase + bin) { 0f }
+                val denominator = vocal * vocal + accompaniment * accompaniment + 1e-10f
+                if (vocals) {
+                    (vocal * vocal + 5e-11f) / denominator
+                } else {
+                    (accompaniment * accompaniment + 5e-11f) / denominator
                 }
             }
         }
-        return SpleeterStft.istft(real, imag, spectrum.frames, outputFrames)
     }
 
     @Synchronized
