@@ -101,25 +101,29 @@ class StemTransitionRenderer(
         role: MashupRole
     ): ShortArray {
         val result = FloatArray(frames * 2)
+        val loopFrames = (frames / 4).coerceAtLeast(1)
+        val loopFadeFrames = (StemSeparator.SAMPLE_RATE * 0.025f).toInt().coerceAtLeast(1)
+        val echoDelayFrames = (StemSeparator.SAMPLE_RATE * 0.28f).toInt().coerceAtLeast(1)
+        val echoBuffer = FloatArray(frames * 2)
         for (frame in 0 until frames) {
             val t = frame.toFloat() / frames.toFloat()
             val gains = when (role) {
                 MashupRole.AInstrumentalBVocals -> floatArrayOf(
-                    1f - DjFade.smoothstep(DjFade.window(t, 0.82f, 1f)),
-                    DjFade.fadeOut(t, 0f, 0.12f),
+                    1f - DjFade.smoothstep(DjFade.window(t, 0.78f, 1f)),
+                    DjFade.fadeOut(t, 0f, 0.18f),
                     DjFade.fadeIn(t, 0.82f, 1f),
-                    DjFade.fadeIn(t, 0.12f, 0.32f)
+                    DjFade.fadeIn(t, 0.18f, 0.42f)
                 )
                 MashupRole.BInstrumentalAVocals -> floatArrayOf(
                     0f,
-                    DjFade.fadeOut(t, 0.20f, 0.42f),
+                    DjFade.fadeOut(t, 0.15f, 0.45f),
                     1f,
                     0f
                 )
                 MashupRole.InstrumentalCrossfade -> floatArrayOf(
-                    DjFade.equalPowerOut(t, 0.12f, 0.88f),
+                    DjFade.equalPowerOut(t, 0.15f, 0.85f),
                     0f,
-                    DjFade.equalPowerIn(t, 0.12f, 0.88f),
+                    DjFade.equalPowerIn(t, 0.15f, 0.85f),
                     0f
                 )
                 MashupRole.None -> floatArrayOf(
@@ -131,11 +135,33 @@ class StemTransitionRenderer(
             }
             for (channel in 0..1) {
                 val index = frame * 2 + channel
+                val currentInstrumental = if (role == MashupRole.AInstrumentalBVocals) {
+                    loopedSample(
+                        current.instrumental,
+                        frame,
+                        loopFrames,
+                        loopFadeFrames,
+                        channel
+                    )
+                } else {
+                    current.instrumental.getOrElse(index) { 0f }
+                }
                 var sample = 0f
-                sample += current.instrumental.getOrElse(index) { 0f } * gains[0]
+                sample += currentInstrumental * gains[0]
                 sample += current.vocals.getOrElse(index) { 0f } * gains[1]
                 sample += next.instrumental.getOrElse(index) { 0f } * gains[2]
                 sample += next.vocals.getOrElse(index) { 0f } * gains[3]
+                if (role != MashupRole.None) {
+                    val echoRead = frame - echoDelayFrames
+                    val echo = if (echoRead >= 0) {
+                        echoBuffer[echoRead * 2 + channel] * 0.08f
+                    } else {
+                        0f
+                    }
+                    echoBuffer[index] = current.vocals.getOrElse(index) { 0f } * gains[1] +
+                        echo * 0.18f
+                    sample += echo
+                }
                 result[index] = softClip(sample)
             }
         }
@@ -144,6 +170,23 @@ class StemTransitionRenderer(
             short[index] = (result[index].coerceIn(-1f, 1f) * 32767f).roundToInt().toShort()
         }
         return short
+    }
+
+    private fun loopedSample(
+        samples: FloatArray,
+        frame: Int,
+        loopFrames: Int,
+        fadeFrames: Int,
+        channel: Int
+    ): Float {
+        val position = frame % loopFrames
+        val index = position * 2 + channel
+        val value = samples.getOrElse(index) { 0f }
+        if (position < loopFrames - fadeFrames) return value
+        val start = samples.getOrElse(channel) { 0f }
+        val alpha = ((position - (loopFrames - fadeFrames)).toFloat() / fadeFrames)
+            .coerceIn(0f, 1f)
+        return value * (1f - alpha) + start * alpha
     }
 
     private fun writeWav(file: File, samples: ShortArray, frames: Int) {
