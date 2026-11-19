@@ -131,6 +131,9 @@ class AutoMixPlaybackManager(
     private var loopJob: Job? = null
     private var analysisJob: Job? = null
     private var stemJob: Job? = null
+    private var stemAutoJob: Job? = null
+    private var stemAutoPairKey: String? = null
+    private var nextLocked: Boolean = false
     private var stemPhase: StemPhase = StemPhase.Idle
     private var stemProgress: Float = 0f
     private var clipPreparedFile: File? = null
@@ -206,6 +209,10 @@ class AutoMixPlaybackManager(
         stemProgress = 0f
         clipPreparedFile = null
         clipTransitioning = false
+        nextLocked = false
+        stemAutoPairKey = null
+        stemAutoJob?.cancel()
+        stemAutoJob = null
         clipDeck.stop()
         clipDeck.clearMediaItems()
         queue.clear()
@@ -234,6 +241,7 @@ class AutoMixPlaybackManager(
         deckA.playWhenReady = true
         startPolling()
         ensureAnalysis()
+        scheduleStemAutoPrepare()
         publish()
     }
 
@@ -250,6 +258,10 @@ class AutoMixPlaybackManager(
         loopJob?.cancel()
         stemJob?.cancel()
         stemJob = null
+        stemAutoJob?.cancel()
+        stemAutoJob = null
+        stemAutoPairKey = null
+        nextLocked = false
         clipTransitioning = false
         pollJob = null
         transitionJob = null
@@ -298,6 +310,8 @@ class AutoMixPlaybackManager(
         val currentTrack = current ?: return
         val nextTrack = next ?: return
         val plan = currentPlan() ?: return
+        nextLocked = true
+        stemAutoPairKey = currentTrack.id + "|" + nextTrack.id
         analysisJob?.cancel()
         analysisJob = null
         stemJob = scope.launch {
@@ -394,9 +408,36 @@ class AutoMixPlaybackManager(
                 publish()
             } finally {
                 stemJob = null
+                if (stemPhase != StemPhase.Ready) nextLocked = false
                 stemSeparator.closeSession()
                 if (isStarted) ensureAnalysis()
             }
+        }
+    }
+
+    private fun scheduleStemAutoPrepare() {
+        if (!stemSeparator.modelReady()) return
+        if (!isStarted || isTransitioning || stemJob?.isActive == true || clipPreparedFile != null) {
+            return
+        }
+        val currentTrack = current ?: return
+        val nextTrack = next ?: return
+        if (features[currentTrack.id]?.analysisComplete != true ||
+            features[nextTrack.id]?.analysisComplete != true
+        ) {
+            return
+        }
+        val key = currentTrack.id + "|" + nextTrack.id
+        if (stemAutoPairKey == key) return
+        stemAutoJob?.cancel()
+        stemAutoJob = scope.launch {
+            delay(1_500)
+            if (current?.id != currentTrack.id || next?.id != nextTrack.id || isTransitioning) {
+                return@launch
+            }
+            if (clipPreparedFile != null) return@launch
+            Log.d("AutoMix", "stem auto prepare key=$key")
+            prepareStems()
         }
     }
 
@@ -408,6 +449,9 @@ class AutoMixPlaybackManager(
         activeSpeed = 1f
         activePitchSemitones = 0
         if (activeIsA) dspA.resetEffects() else dspB.resetEffects()
+        nextLocked = false
+        stemAutoPairKey = null
+        clipPreparedFile = null
         index += 1
         current = target
         positionMs = 0L
@@ -576,6 +620,9 @@ class AutoMixPlaybackManager(
             current = target
             positionMs = 0L
             durationMs = 0L
+            nextLocked = false
+            stemAutoPairKey = null
+            clipPreparedFile = null
             isTransitioning = false
             transitionProgress = 0f
             preloadNext()
@@ -664,6 +711,8 @@ class AutoMixPlaybackManager(
                 durationMs = 0L
                 clipTransitioning = false
                 clipPreparedFile = null
+                nextLocked = false
+                stemAutoPairKey = null
                 isTransitioning = false
                 transitionProgress = 0f
                 preloadNext()
@@ -709,6 +758,7 @@ class AutoMixPlaybackManager(
     }
 
     private fun preloadNext() {
+        if (nextLocked) return
         val target = queue.getOrNull(index + 1)
         if (target == null) {
             scope.launch {
@@ -724,6 +774,7 @@ class AutoMixPlaybackManager(
             return
         }
         if (next?.id != target.id) {
+            stemAutoPairKey = null
             clipPreparedFile = null
             clipDeck.stop()
             clipDeck.clearMediaItems()
@@ -731,6 +782,7 @@ class AutoMixPlaybackManager(
         }
         next = target
         loadTrack(idlePlayer(), target, 0f)
+        scheduleStemAutoPrepare()
         publish()
     }
 
@@ -887,6 +939,7 @@ class AutoMixPlaybackManager(
 
     private fun refineQueue() {
         if (!isStarted || isTransitioning) return
+        if (nextLocked || clipPreparedFile != null) return
         val currentTrack = current ?: return
         val currentFeatures = features[currentTrack.id] ?: return
         val start = index + 1
@@ -911,14 +964,24 @@ class AutoMixPlaybackManager(
             "AutoMix",
             "queue top: " + ordered.take(5).joinToString(" | ") { track ->
                 val f = features[track.id]
+                val pair = AutoMixQueueSelector.pairScore(
+                    current = currentTrack,
+                    currentFeatures = currentFeatures,
+                    candidate = track,
+                    candidateFeatures = f,
+                    recentTrackIds = recent,
+                    currentPitchSemitones = activePitchSemitones
+                )
                 "${track.title.take(18)} bpm=${f?.bpm?.roundToInt()} " +
-                    "key=${f?.key} full=${f?.analysisComplete}"
+                    "key=${f?.key} full=${f?.analysisComplete} score=${pair.roundToInt()}"
             }
         )
         val newNext = queue.getOrNull(start)
         if (newNext?.id != next?.id) {
+            stemAutoPairKey = null
             next = newNext
             newNext?.let { loadTrack(idlePlayer(), it, 0f) }
+            scheduleStemAutoPrepare()
             publish()
         }
     }

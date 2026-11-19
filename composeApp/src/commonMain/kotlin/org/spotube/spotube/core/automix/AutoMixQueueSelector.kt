@@ -19,6 +19,7 @@ object AutoMixQueueSelector {
             .sortedWith(
                 compareBy<IndexedValue<MetadataTrack>> {
                     score(
+                        current,
                         currentArtist,
                         currentFeatures,
                         currentPitchSemitones,
@@ -31,7 +32,25 @@ object AutoMixQueueSelector {
             .map { it.value }
     }
 
+    fun pairScore(
+        current: MetadataTrack?,
+        currentFeatures: AudioFeatures?,
+        candidate: MetadataTrack,
+        candidateFeatures: AudioFeatures?,
+        recentTrackIds: Set<String> = emptySet(),
+        currentPitchSemitones: Int = 0
+    ): Float = score(
+        current,
+        current?.artists?.firstOrNull()?.id.orEmpty(),
+        currentFeatures,
+        currentPitchSemitones,
+        candidate,
+        candidateFeatures,
+        recentTrackIds
+    )
+
     private fun score(
+        current: MetadataTrack?,
         currentArtist: String,
         currentFeatures: AudioFeatures?,
         currentPitch: Int,
@@ -56,8 +75,8 @@ object AutoMixQueueSelector {
         val targetEnergy = (currentFeatures.energy + 0.04f).coerceIn(0.15f, 0.95f)
         score += abs(targetEnergy - candidateFeatures.energy) * 18f
         val vibeDistance = currentFeatures.vibe.distance(candidateFeatures.vibe)
-        score += vibeDistance * 70f
-        if (vibeDistance > 0.32f) score += 45f
+        score += vibeDistance * 90f
+        if (vibeDistance > 0.32f) score += 55f
         val swingDiff = abs(currentFeatures.swingRatio - candidateFeatures.swingRatio)
         if (swingDiff > 0.18f) score += 120f else score += swingDiff * 40f
         if (tempoRatio(currentFeatures.bpm, candidateFeatures.bpm) == null) score += 80f
@@ -69,6 +88,33 @@ object AutoMixQueueSelector {
         if (!candidateFeatures.analysisComplete) score += 60f
         score += (1f - minOf(currentFeatures.bpmConfidence, candidateFeatures.bpmConfidence)) * 25f
         score -= candidateFeatures.confidence * 2f
+        if (current != null) {
+            val plan = AutoMixPlanner.plan(
+                current = current,
+                next = candidate,
+                currentFeatures = currentFeatures,
+                nextFeatures = candidateFeatures,
+                currentPitchSemitones = currentPitch
+            )
+            if (plan.level == null) {
+                score += 110f
+            } else {
+                score -= 30f
+                if (plan.kind == TransitionKind.Mashup) score -= 25f
+                if (plan.earlyCut) score -= 15f
+            }
+            val currentDurationMs = if (
+                currentFeatures.analysisComplete &&
+                currentFeatures.durationSeconds > 20f
+            ) {
+                (currentFeatures.durationSeconds * 1000f).toLong()
+            } else {
+                current.durationMs
+            }
+            if (plan.outgoingCueMs + plan.durationMs + 500L > currentDurationMs) {
+                score += 180f
+            }
+        }
         return score
     }
 
