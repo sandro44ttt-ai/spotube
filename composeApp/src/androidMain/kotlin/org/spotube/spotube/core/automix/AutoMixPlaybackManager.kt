@@ -33,7 +33,6 @@ import org.spotube.spotube.core.server.StreamRequest
 import org.spotube.spotube.core.server.StreamTrackRegistry
 import org.spotube.spotube.core.server.StreamingUrlRepository
 import org.spotube.spotube.media.AutoMixForegroundService
-import org.spotube.spotube.modules.plugin.PluginProvider
 import org.spotube.spotube.modules.settings.SettingsProvider
 import kotlin.math.min
 import kotlin.math.pow
@@ -44,7 +43,6 @@ import kotlin.random.Random
 class AutoMixPlaybackManager(
     private val context: Context,
     private val settingsProvider: SettingsProvider,
-    private val pluginProvider: PluginProvider,
     private val analyzer: AudioFeatureAnalyzer,
     private val streamingUrlRepository: StreamingUrlRepository,
     private val stemSeparator: StemSeparator,
@@ -761,16 +759,11 @@ class AutoMixPlaybackManager(
         if (nextLocked) return
         val target = queue.getOrNull(index + 1)
         if (target == null) {
-            scope.launch {
-                val additions = fetchRecommendations(queue.takeLast(5), queue.map { it.id }.toSet())
-                if (!isStarted) return@launch
-                queue.addAll(if (additions.isNotEmpty()) additions else queue)
-                StreamTrackRegistry.registerAll(additions)
-                next = queue.getOrNull(index + 1)
-                next?.let { loadTrack(idlePlayer(), it, 0f) }
-                ensureAnalysis()
-                publish()
-            }
+            next = null
+            clipPreparedFile = null
+            clipDeck.stop()
+            clipDeck.clearMediaItems()
+            publish()
             return
         }
         if (next?.id != target.id) {
@@ -796,26 +789,6 @@ class AutoMixPlaybackManager(
 
     private fun activePlayer() = if (activeIsA) deckA else deckB
     private fun idlePlayer() = if (activeIsA) deckB else deckA
-
-    private suspend fun fetchRecommendations(
-        seeds: List<MetadataTrack>,
-        existingIds: Set<String>
-    ): List<MetadataTrack> {
-        if (seeds.isEmpty()) return emptyList()
-        val plugin = pluginProvider.selectedMetadataPlugin.value ?: return emptyList()
-        return try {
-            plugin.use {
-                metadataTrackAPI.recommendationsBasedOnTracks(
-                    seedTrackIds = seeds.map { it.id },
-                    limit = 20
-                )
-            }.filter { it.id !in existingIds }.take(15)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
 
     private fun requestFocus() {
         if (focusRequest != null) return
@@ -1050,6 +1023,7 @@ class AutoMixPlaybackManager(
                     )
                     features[track.id] = result
                     refineQueue()
+                    scheduleStemAutoPrepare()
                     publish()
                     delay(180)
                 }

@@ -70,6 +70,12 @@ object AutoMixQueueSelector {
             candidateFeatures.keyMinor
         )
         score += bpmDistance(currentFeatures.bpm, candidateFeatures.bpm) * 55f
+        val directBpmDistance = if (currentFeatures.bpm > 0f && candidateFeatures.bpm > 0f) {
+            abs(currentFeatures.bpm - candidateFeatures.bpm) / currentFeatures.bpm
+        } else {
+            0.5f
+        }
+        if (directBpmDistance > 0.10f) score += 90f
         score += keyDistance(currentKey, candidateKey) * 16f
         score += abs(shift) * 10f
         val targetEnergy = (currentFeatures.energy + 0.04f).coerceIn(0.15f, 0.95f)
@@ -84,7 +90,7 @@ object AutoMixQueueSelector {
         if (artist.isNotEmpty() && artist == currentArtist) score += 28f
         if (candidate.id in recentTrackIds) score += 40f
         val vocalLoad = currentFeatures.vocalness + candidateFeatures.vocalness
-        if (vocalLoad > 1.15f) score += 35f
+        if (vocalLoad > 1.15f) score += 140f
         if (!candidateFeatures.analysisComplete) score += 60f
         score += (1f - minOf(currentFeatures.bpmConfidence, candidateFeatures.bpmConfidence)) * 25f
         score -= candidateFeatures.confidence * 2f
