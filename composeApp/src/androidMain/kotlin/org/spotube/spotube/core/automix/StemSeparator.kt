@@ -8,6 +8,7 @@ import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.os.Process
 import android.util.Log
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.prepareGet
@@ -22,6 +23,7 @@ import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -38,40 +40,76 @@ class StemSeparator(
 ) {
     data class StemWindow(
         val frames: Int,
-        val drums: FloatArray,
-        val bass: FloatArray,
-        val other: FloatArray,
-        val vocals: FloatArray
+        val vocals: FloatArray,
+        val instrumental: FloatArray
     )
 
-    private val modelFile = File(context.filesDir, "automix/stems/models/htdemucs.onnx")
+    private val modelsDir = File(context.filesDir, "automix/stems/models")
+    private val vocalsModel = File(modelsDir, "spleeter_vocals.onnx")
+    private val accompanimentModel = File(modelsDir, "spleeter_accompaniment.onnx")
     private var environment: OrtEnvironment? = null
-    private var session: OrtSession? = null
+    private var vocalsSession: OrtSession? = null
+    private var accompanimentSession: OrtSession? = null
 
-    fun modelReady(): Boolean = modelFile.exists() && modelFile.length() > MIN_MODEL_BYTES
+    fun modelReady(): Boolean =
+        vocalsModel.length() > MIN_MODEL_BYTES &&
+            accompanimentModel.length() > MIN_MODEL_BYTES
 
     @Synchronized
     fun closeSession() {
-        runCatching { session?.close() }
-        session = null
+        runCatching { vocalsSession?.close() }
+        runCatching { accompanimentSession?.close() }
+        vocalsSession = null
+        accompanimentSession = null
     }
 
     suspend fun ensureModel(onProgress: (Float) -> Unit = {}): File? = withContext(Dispatchers.IO) {
-        if (modelReady()) return@withContext modelFile
-        val parent = modelFile.parentFile
-        if (parent != null && !parent.exists()) parent.mkdirs()
-        val temp = File(modelFile.parentFile, "htdemucs.onnx.download")
+        if (modelReady()) return@withContext vocalsModel
+        val parent = modelsDir
+        if (!parent.exists() && !parent.mkdirs()) return@withContext null
+
+        if (!vocalsModel.exists() || vocalsModel.length() <= MIN_MODEL_BYTES) {
+            val ok = downloadModel(
+                url = VOCALS_MODEL_URL,
+                destination = vocalsModel,
+                onProgress = { progress -> onProgress(progress * 0.5f) }
+            )
+            if (!ok) return@withContext null
+        }
+        if (!accompanimentModel.exists() || accompanimentModel.length() <= MIN_MODEL_BYTES) {
+            val ok = downloadModel(
+                url = ACCOMPANIMENT_MODEL_URL,
+                destination = accompanimentModel,
+                onProgress = { progress -> onProgress(0.5f + progress * 0.5f) }
+            )
+            if (!ok) return@withContext null
+        }
+        onProgress(1f)
+        Log.d(
+            "AutoMix",
+            "stem models ready vocals=${vocalsModel.length()} accompaniment=${accompanimentModel.length()}"
+        )
+        File(modelsDir, "htdemucs.onnx").delete()
+        vocalsModel
+    }
+
+    private suspend fun downloadModel(
+        url: String,
+        destination: File,
+        onProgress: (Float) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        val temp = File(destination.parentFile, destination.name + ".download")
         if (temp.exists()) temp.delete()
         val client = httpClientFactory.create {
             install(HttpTimeout) {
-                requestTimeoutMillis = 30 * 60 * 1000L
+                requestTimeoutMillis = 15 * 60 * 1000L
                 connectTimeoutMillis = 15_000L
                 socketTimeoutMillis = 120_000L
             }
         }
         try {
-            val completed = withTimeoutOrNull(30 * 60 * 1000L) {
-                client.prepareGet(MODEL_URL) {
+            val completed = withTimeoutOrNull(15 * 60 * 1000L) {
+                client.prepareGet(url) {
                     headers.append(HttpHeaders.Range, "bytes=0-")
                     headers.append("Accept-Encoding", "identity")
                 }.execute { response ->
@@ -91,7 +129,7 @@ class StemSeparator(
                             if (read == 0) continue
                             output.write(buffer, 0, read)
                             total += read
-                            if (total - lastReported >= 8 * 1024 * 1024L) {
+                            if (total - lastReported >= 4 * 1024 * 1024L) {
                                 lastReported = total
                                 val progress = if (expected != null && expected > 0L) {
                                     (total.toFloat() / expected.toFloat()).coerceIn(0f, 0.99f)
@@ -102,30 +140,25 @@ class StemSeparator(
                             }
                         }
                     }
-                    Log.d("AutoMix", "stem model downloaded bytes=$total")
+                    Log.d("AutoMix", "stem model downloaded ${destination.name} bytes=$total")
                     expected == null || total >= expected * 0.98
                 }
             } ?: false
-            if (!completed) {
+            if (!completed || temp.length() <= MIN_MODEL_BYTES) {
                 temp.delete()
-                return@withContext null
+                return@withContext false
             }
-            if (temp.length() <= MIN_MODEL_BYTES) {
-                temp.delete()
-                return@withContext null
-            }
-            if (modelFile.exists()) modelFile.delete()
-            if (!temp.renameTo(modelFile)) {
-                temp.copyTo(modelFile, overwrite = true)
+            if (destination.exists()) destination.delete()
+            if (!temp.renameTo(destination)) {
+                temp.copyTo(destination, overwrite = true)
                 temp.delete()
             }
             onProgress(1f)
-            Log.d("AutoMix", "stem model ready size=${modelFile.length()}")
-            modelFile
+            true
         } catch (error: Exception) {
             temp.delete()
             Log.w("AutoMix", "stem model download failed: ${error.message}")
-            null
+            false
         } finally {
             client.close()
         }
@@ -147,7 +180,7 @@ class StemSeparator(
                 return@withContext null
             }
             val available = pcm.size / 2
-            if (available < SAMPLE_RATE * 2) return@withContext null
+            if (available < SAMPLE_RATE / 4) return@withContext null
             separatePcm(pcm, 0, min(available, frames.coerceAtLeast(1)), onProgress)
         } finally {
             if (source.second) source.first.delete()
@@ -220,110 +253,193 @@ class StemSeparator(
         frames: Int,
         onProgress: (Float) -> Unit
     ): StemWindow? {
-        val onnx = ensureSession() ?: return null
-        Log.d("AutoMix", "stem inference start frames=$frames")
-        val overlap = SEGMENT_SAMPLES / 4
-        val stride = SEGMENT_SAMPLES - overlap
-        val drums = FloatArray(frames * 2)
-        val bass = FloatArray(frames * 2)
-        val other = FloatArray(frames * 2)
-        val vocals = FloatArray(frames * 2)
-        val weights = FloatArray(frames)
-        val chunkStarts = buildList {
-            var start = 0
-            while (start < frames) {
-                add(start)
-                if (start + SEGMENT_SAMPLES >= frames) break
-                start += stride
-            }
-        }
-        val output = FloatArray(4 * 2 * SEGMENT_SAMPLES)
-        chunkStarts.forEachIndexed { chunkIndex, chunkStart ->
-            val mix = FloatArray(2 * SEGMENT_SAMPLES)
-            val copyFrames = min(SEGMENT_SAMPLES, frames - chunkStart)
-            for (frame in 0 until copyFrames) {
-                val source = (startFrame + chunkStart + frame) * 2
-                mix[frame] = pcm[source]
-                mix[SEGMENT_SAMPLES + frame] = pcm[source + 1]
-            }
-            if (!runChunk(onnx, mix, output)) return null
-            val isFirst = chunkIndex == 0
-            val isLast = chunkIndex == chunkStarts.lastIndex
-            for (frame in 0 until min(SEGMENT_SAMPLES, frames - chunkStart)) {
-                val head = if (isFirst) 1f else frame.toFloat() / overlap.toFloat()
-                val tail = if (isLast) 1f else (SEGMENT_SAMPLES - 1 - frame).toFloat() / overlap.toFloat()
-                val w = minOf(1f, head, tail).coerceIn(0f, 1f)
-                val target = (chunkStart + frame) * 2
-                drums[target] += output[0 * 2 * SEGMENT_SAMPLES + frame] * w
-                drums[target + 1] += output[0 * 2 * SEGMENT_SAMPLES + SEGMENT_SAMPLES + frame] * w
-                bass[target] += output[1 * 2 * SEGMENT_SAMPLES + frame] * w
-                bass[target + 1] += output[1 * 2 * SEGMENT_SAMPLES + SEGMENT_SAMPLES + frame] * w
-                other[target] += output[2 * 2 * SEGMENT_SAMPLES + frame] * w
-                other[target + 1] += output[2 * 2 * SEGMENT_SAMPLES + SEGMENT_SAMPLES + frame] * w
-                vocals[target] += output[3 * 2 * SEGMENT_SAMPLES + frame] * w
-                vocals[target + 1] += output[3 * 2 * SEGMENT_SAMPLES + SEGMENT_SAMPLES + frame] * w
-                weights[chunkStart + frame] += w
-            }
-            onProgress((chunkIndex + 1).toFloat() / chunkStarts.size.toFloat())
-            Log.d("AutoMix", "stem chunk ${chunkIndex + 1}/${chunkStarts.size}")
-        }
+        val sessions = ensureSessions() ?: return null
+        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+        onProgress(0.05f)
+        val left = FloatArray(frames)
+        val right = FloatArray(frames)
         for (frame in 0 until frames) {
-            val norm = weights[frame].coerceAtLeast(1e-5f)
-            val index = frame * 2
-            drums[index] /= norm
-            drums[index + 1] /= norm
-            bass[index] /= norm
-            bass[index + 1] /= norm
-            other[index] /= norm
-            other[index + 1] /= norm
-            vocals[index] /= norm
-            vocals[index + 1] /= norm
+            val source = (startFrame + frame) * 2
+            left[frame] = pcm.getOrElse(source) { 0f }
+            right[frame] = pcm.getOrElse(source + 1) { 0f }
         }
-        return StemWindow(frames, drums, bass, other, vocals)
+        onProgress(0.12f)
+        val leftSpectrum = SpleeterStft.stft(left)
+        val rightSpectrum = SpleeterStft.stft(right)
+        val splitCount = splitCount(leftSpectrum.frames)
+        val input = FloatArray(2 * splitCount * SpleeterStft.FRAMES_PER_SPLIT * SpleeterStft.MODEL_BINS)
+        fillModelInput(input, leftSpectrum, 0, splitCount)
+        fillModelInput(input, rightSpectrum, 1, splitCount)
+        Log.d(
+            "AutoMix",
+            "stem spleeter stft frames=${leftSpectrum.frames} splits=$splitCount"
+        )
+        onProgress(0.20f)
+        val vocalsOutput = runModel(sessions.first, input, splitCount) ?: return null
+        onProgress(0.55f)
+        val accompanimentOutput = runModel(sessions.second, input, splitCount) ?: return null
+        onProgress(0.85f)
+        val vocals = FloatArray(frames * 2)
+        val instrumental = FloatArray(frames * 2)
+        for (channel in 0..1) {
+            val spectrum = if (channel == 0) leftSpectrum else rightSpectrum
+            val channelVocals = reconstruct(
+                spectrum = spectrum,
+                vocalsOutput = vocalsOutput,
+                accompanimentOutput = accompanimentOutput,
+                splitCount = splitCount,
+                channel = channel,
+                outputFrames = frames,
+                vocals = true
+            )
+            val channelInstrumental = reconstruct(
+                spectrum = spectrum,
+                vocalsOutput = vocalsOutput,
+                accompanimentOutput = accompanimentOutput,
+                splitCount = splitCount,
+                channel = channel,
+                outputFrames = frames,
+                vocals = false
+            )
+            for (frame in 0 until frames) {
+                val target = frame * 2 + channel
+                vocals[target] = channelVocals.getOrElse(frame) { 0f }
+                instrumental[target] = channelInstrumental.getOrElse(frame) { 0f }
+            }
+        }
+        onProgress(1f)
+        Log.d("AutoMix", "stem spleeter done frames=$frames")
+        return StemWindow(frames, vocals, instrumental)
     }
 
-    private fun runChunk(session: OrtSession, mix: FloatArray, output: FloatArray): Boolean {
-        val env = environment ?: return false
-        return try {
-            val input = OnnxTensor.createTensor(
-                env,
-                FloatBuffer.wrap(mix),
-                longArrayOf(1L, 2L, SEGMENT_SAMPLES.toLong())
-            )
-            input.use { tensor ->
-                session.run(mapOf(session.inputNames.first() to tensor)).use { result ->
-                    val out = result.get(0) as OnnxTensor
-                    val buffer = out.floatBuffer
-                    if (buffer == null) return false
-                    buffer.get(output)
+    private fun splitCount(spectrumFrames: Int): Int {
+        var splits = (spectrumFrames + SpleeterStft.FRAMES_PER_SPLIT - 1) /
+            SpleeterStft.FRAMES_PER_SPLIT
+        if (spectrumFrames % SpleeterStft.FRAMES_PER_SPLIT == 0) splits += 1
+        return splits.coerceAtLeast(1)
+    }
+
+    private fun fillModelInput(
+        input: FloatArray,
+        spectrum: SpleeterStft.Spectrum,
+        channel: Int,
+        splitCount: Int
+    ) {
+        val splitSize = SpleeterStft.FRAMES_PER_SPLIT
+        val bins = SpleeterStft.MODEL_BINS
+        for (split in 0 until splitCount) {
+            for (frameInSplit in 0 until splitSize) {
+                val frame = split * splitSize + frameInSplit
+                if (frame >= spectrum.frames) continue
+                val sourceBase = ((channel * splitCount + split) * splitSize + frameInSplit) * bins
+                for (bin in 0 until bins) {
+                    val real = spectrum.real[frame][bin]
+                    val imag = spectrum.imag[frame][bin]
+                    input[sourceBase + bin] = sqrt(real * real + imag * imag)
                 }
             }
-            true
-        } catch (error: Exception) {
-            Log.w("AutoMix", "stem inference failed: ${error.message}")
-            false
         }
+    }
+
+    private fun runModel(
+        session: OrtSession,
+        input: FloatArray,
+        splitCount: Int
+    ): FloatArray? {
+        val env = environment ?: return null
+        return try {
+            val tensor = OnnxTensor.createTensor(
+                env,
+                FloatBuffer.wrap(input),
+                longArrayOf(
+                    2L,
+                    splitCount.toLong(),
+                    SpleeterStft.FRAMES_PER_SPLIT.toLong(),
+                    SpleeterStft.MODEL_BINS.toLong()
+                )
+            )
+            tensor.use { value ->
+                session.run(mapOf(session.inputNames.first() to value)).use { result ->
+                    val output = result.get(0) as OnnxTensor
+                    val buffer = output.floatBuffer ?: return null
+                    val values = FloatArray(buffer.remaining())
+                    buffer.get(values)
+                    values
+                }
+            }
+        } catch (error: Exception) {
+            Log.w("AutoMix", "stem spleeter inference failed: ${error.message}")
+            null
+        }
+    }
+
+    private fun reconstruct(
+        spectrum: SpleeterStft.Spectrum,
+        vocalsOutput: FloatArray,
+        accompanimentOutput: FloatArray,
+        splitCount: Int,
+        channel: Int,
+        outputFrames: Int,
+        vocals: Boolean
+    ): FloatArray {
+        val splitSize = SpleeterStft.FRAMES_PER_SPLIT
+        val bins = SpleeterStft.MODEL_BINS
+        val real = Array(spectrum.frames) { FloatArray(SpleeterStft.BINS) }
+        val imag = Array(spectrum.frames) { FloatArray(SpleeterStft.BINS) }
+        for (split in 0 until splitCount) {
+            for (frameInSplit in 0 until splitSize) {
+                val frame = split * splitSize + frameInSplit
+                if (frame >= spectrum.frames) continue
+                val sourceBase = ((channel * splitCount + split) * splitSize + frameInSplit) * bins
+                for (bin in 0 until bins) {
+                    val vocal = vocalsOutput.getOrElse(sourceBase + bin) { 0f }
+                    val accompaniment = accompanimentOutput.getOrElse(sourceBase + bin) { 0f }
+                    val denominator = vocal * vocal + accompaniment * accompaniment + 1e-10f
+                    val weight = if (vocals) {
+                        (vocal * vocal + 5e-11f) / denominator
+                    } else {
+                        (accompaniment * accompaniment + 5e-11f) / denominator
+                    }
+                    real[frame][bin] = spectrum.real[frame][bin] * weight
+                    imag[frame][bin] = spectrum.imag[frame][bin] * weight
+                }
+            }
+        }
+        return SpleeterStft.istft(real, imag, spectrum.frames, outputFrames)
     }
 
     @Synchronized
-    private fun ensureSession(): OrtSession? {
-        session?.let { return it }
+    private fun ensureSessions(): Pair<OrtSession, OrtSession>? {
+        val existingVocals = vocalsSession
+        val existingAccompaniment = accompanimentSession
+        if (existingVocals != null && existingAccompaniment != null) {
+            return existingVocals to existingAccompaniment
+        }
         if (!modelReady()) return null
         return try {
             val env = OrtEnvironment.getEnvironment()
             val options = OrtSession.SessionOptions().apply {
-                setIntraOpNumThreads(4)
+                setIntraOpNumThreads(1)
+                setInterOpNumThreads(1)
+                setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                 runCatching { setMemoryPatternOptimization(false) }
                 runCatching { setCPUArenaAllocator(false) }
             }
-            val created = env.createSession(modelFile.absolutePath, options)
+            val createdVocals = env.createSession(vocalsModel.absolutePath, options)
+            val createdAccompaniment = env.createSession(accompanimentModel.absolutePath, options)
             environment = env
-            session = created
-            Log.d("AutoMix", "stem session ready inputs=${created.inputNames}")
-            created
+            vocalsSession = createdVocals
+            accompanimentSession = createdAccompaniment
+            Log.d(
+                "AutoMix",
+                "stem spleeter sessions ready vocals=${createdVocals.inputNames} " +
+                    "accompaniment=${createdAccompaniment.inputNames}"
+            )
+            createdVocals to createdAccompaniment
         } catch (error: Exception) {
-            Log.w("AutoMix", "stem session failed: ${error.message}")
+            Log.w("AutoMix", "stem spleeter session failed: ${error.message}")
+            closeSession()
             null
         }
     }
@@ -486,6 +602,7 @@ class StemSeparator(
             runCatching { extractor?.release() }
         }
     }
+
     private fun resampleTo44k(input: FloatArray, inputRate: Int): FloatArray {
         if (inputRate == SAMPLE_RATE) return input
         val inputFrames = input.size / 2
@@ -509,11 +626,12 @@ class StemSeparator(
 
     companion object {
         const val SAMPLE_RATE = 44_100
-        const val SEGMENT_SAMPLES = 343_980
         private const val DECODE_TIMEOUT_MS = 60_000L
         private const val MAX_AUDIO_BYTES = 40L * 1024 * 1024
-        private const val MIN_MODEL_BYTES = 300_000_000L
-        private const val MODEL_URL =
-            "https://huggingface.co/smank/htdemucs-onnx/resolve/main/htdemucs.onnx?download=true"
+        private const val MIN_MODEL_BYTES = 30_000_000L
+        private const val VOCALS_MODEL_URL =
+            "https://huggingface.co/csukuangfj/sherpa-onnx-spleeter-2stems/resolve/main/vocals.onnx"
+        private const val ACCOMPANIMENT_MODEL_URL =
+            "https://huggingface.co/csukuangfj/sherpa-onnx-spleeter-2stems/resolve/main/accompaniment.onnx"
     }
 }

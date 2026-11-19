@@ -39,6 +39,8 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
+private const val STEM_PREPARE_TIMEOUT_MS = 90_000L
+
 class AutoMixPlaybackManager(
     private val context: Context,
     private val settingsProvider: SettingsProvider,
@@ -142,8 +144,12 @@ class AutoMixPlaybackManager(
     private var lastStartTrackId: String? = null
     private val localAnalysisEnabled = true
     private var lastError: String = ""
+    private var recovering = false
+    private var stalledPolls = 0
+    private var lastObservedPosition = 0L
 
     init {
+
         deckA.addAnalyticsListener(object : AnalyticsListener {
             override fun onAudioSessionIdChanged(
                 eventTime: AnalyticsListener.EventTime,
@@ -165,7 +171,7 @@ class AutoMixPlaybackManager(
                 Log.e("AutoMix", "deckA error: ${error.errorCode} ${error.message}", error)
                 if (activeIsA) {
                     lastError = "A${error.errorCode}: ${error.message.orEmpty()}"
-                    skipNext()
+                    recoverPlayback()
                 }
             }
         })
@@ -174,10 +180,57 @@ class AutoMixPlaybackManager(
                 Log.e("AutoMix", "deckB error: ${error.errorCode} ${error.message}", error)
                 if (!activeIsA) {
                     lastError = "B${error.errorCode}: ${error.message.orEmpty()}"
-                    skipNext()
+                    recoverPlayback()
                 }
             }
         })
+    }
+
+    private fun cancelStemWork() {
+        stemJob?.cancel()
+        stemJob = null
+        stemAutoJob?.cancel()
+        stemAutoJob = null
+        stemAutoPairKey = null
+        clipPreparedFile = null
+        clipTransitioning = false
+        nextLocked = false
+        stemPhase = StemPhase.Idle
+        stemProgress = 0f
+        clipDeck.pause()
+        clipDeck.stop()
+        clipDeck.clearMediaItems()
+        runCatching { stemSeparator.closeSession() }
+    }
+
+    private fun recoverPlayback() {
+        if (recovering) return
+        recovering = true
+        try {
+            transitionJob?.cancel()
+            transitionJob = null
+            loopJob?.cancel()
+            loopJob = null
+            analysisJob?.cancel()
+            analysisJob = null
+            cancelStemWork()
+            isTransitioning = false
+            transitionProgress = 0f
+            val track = current ?: return
+            val targetPosition = positionMs.coerceIn(0L, track.durationMs.coerceAtLeast(0L))
+            val player = activePlayer()
+            runCatching { player.stop() }
+            loadTrack(player, track, 1f)
+            player.seekTo(targetPosition)
+            player.play()
+            isPlaying = true
+            lastObservedPosition = targetPosition
+            stalledPolls = 0
+            ensureAnalysis()
+        } finally {
+            recovering = false
+            publish()
+        }
     }
 
     fun start(requestedTitle: String, tracks: List<MetadataTrack>) {
@@ -307,6 +360,7 @@ class AutoMixPlaybackManager(
         val currentTrack = current ?: return
         val nextTrack = next ?: return
         val plan = currentPlan() ?: return
+        if (plan.kind == TransitionKind.HardCut) return
         nextLocked = true
         stemAutoPairKey = currentTrack.id + "|" + nextTrack.id
         analysisJob?.cancel()
@@ -368,21 +422,25 @@ class AutoMixPlaybackManager(
                     "stem sources current=${if (currentInfo != null) "live" else "proxy"} " +
                         "next=${if (nextInfo != null) "live" else "proxy"}"
                 )
-                val clip = stemRenderer.render(
-                    currentId = currentTrack.id,
-                    currentUrl = currentUrl,
-                    nextId = nextTrack.id,
-                    nextUrl = nextUrl,
-                    outgoingCueMs = plan.outgoingCueMs,
-                    incomingCueMs = plan.incomingCueMs,
-                    durationMs = plan.durationMs,
-                    tempoRatio = plan.tempoRatio,
-                    pitchSemitones = plan.pitchSemitones,
-                    onProgress = { progress ->
-                        stemProgress = progress
-                        _state.update { it.copy(stemPhase = StemPhase.Separating, stemProgress = progress) }
-                    }
-                )
+                val clip = withTimeoutOrNull(STEM_PREPARE_TIMEOUT_MS) {
+                    stemRenderer.render(
+                        currentId = currentTrack.id,
+                        currentUrl = currentUrl,
+                        nextId = nextTrack.id,
+                        nextUrl = nextUrl,
+                        outgoingCueMs = plan.outgoingCueMs,
+                        incomingCueMs = plan.incomingCueMs,
+                        durationMs = plan.durationMs,
+                        tempoRatio = plan.tempoRatio,
+                        pitchSemitones = plan.pitchSemitones,
+                        onProgress = { progress ->
+                            stemProgress = progress
+                            _state.update {
+                                it.copy(stemPhase = StemPhase.Separating, stemProgress = progress)
+                            }
+                        }
+                    )
+                }
                 if (clip == null) {
                     Log.w("AutoMix", "stem clip render failed")
                     stemPhase = StemPhase.Error
@@ -419,6 +477,7 @@ class AutoMixPlaybackManager(
         }
         val currentTrack = current ?: return
         val nextTrack = next ?: return
+        if (currentPlan()?.kind == TransitionKind.HardCut) return
         if (features[currentTrack.id]?.analysisComplete != true ||
             features[nextTrack.id]?.analysisComplete != true
         ) {
@@ -453,6 +512,8 @@ class AutoMixPlaybackManager(
         current = target
         positionMs = 0L
         durationMs = 0L
+        lastObservedPosition = 0L
+        stalledPolls = 0
         loadTrack(activePlayer(), target, 1f)
         activePlayer().play()
         isPlaying = true
@@ -478,6 +539,29 @@ class AutoMixPlaybackManager(
                         player.play()
                     }
                 }
+                if (
+                    !isTransitioning &&
+                    isPlaying &&
+                    player.playbackState == Player.STATE_READY &&
+                    durationMs > 0L
+                ) {
+                    if (positionMs <= lastObservedPosition) {
+                        stalledPolls += 1
+                    } else {
+                        stalledPolls = 0
+                        lastObservedPosition = positionMs
+                    }
+                    if (stalledPolls >= 30) {
+                        lastError = "playback stalled; stems cancelled"
+                        stalledPolls = 0
+                        recoverPlayback()
+                        delay(100)
+                        continue
+                    }
+                } else {
+                    stalledPolls = 0
+                    lastObservedPosition = positionMs
+                }
                 val plan = currentPlan()
                 val triggerAt = plan?.let { transitionTriggerAt(it, durationMs) }
                     ?: Long.MAX_VALUE
@@ -497,10 +581,51 @@ class AutoMixPlaybackManager(
         }
     }
 
+    private fun startHardCut(plan: TransitionPlan, target: MetadataTrack) {
+        if (isTransitioning) return
+        val from = activePlayer()
+        val to = idlePlayer()
+        analysisJob?.cancel()
+        analysisJob = null
+        cancelStemWork()
+        transitionKind = TransitionKind.HardCut
+        transitionStyle = TransitionStyle.Cut
+        planReason = plan.reason
+        planLevel = plan.level
+        planVibeDistance = plan.vibeDistance
+        transitionProgress = 1f
+        isTransitioning = false
+        clipTransitioning = false
+        from.pause()
+        from.volume = 1f
+        to.playbackParameters = PlaybackParameters(plan.tempoRatio, 1f)
+        to.seekTo((plan.incomingCueMs + plan.incomingOffsetMs).coerceAtLeast(0L))
+        to.volume = 1f
+        to.play()
+        activeIsA = !activeIsA
+        activeSpeed = plan.tempoRatio
+        activePitchSemitones = plan.pitchSemitones
+        index += 1
+        current = target
+        positionMs = 0L
+        durationMs = 0L
+        lastObservedPosition = 0L
+        stalledPolls = 0
+        isPlaying = true
+        next = queue.getOrNull(index + 1)
+        preloadNext()
+        ensureAnalysis()
+        publish()
+    }
+
     private fun startTransition() {
         if (isTransitioning) return
         val target = next ?: return
         val plan = currentPlan() ?: return
+        if (plan.kind == TransitionKind.HardCut) {
+            startHardCut(plan, target)
+            return
+        }
         val from = activePlayer()
         val to = idlePlayer()
         val clip = stemRenderer.clipFor(
@@ -625,6 +750,8 @@ class AutoMixPlaybackManager(
             current = target
             positionMs = 0L
             durationMs = 0L
+            lastObservedPosition = 0L
+            stalledPolls = 0
             nextLocked = false
             stemAutoPairKey = null
             clipPreparedFile = null
@@ -720,6 +847,8 @@ class AutoMixPlaybackManager(
                 current = target
                 positionMs = 0L
                 durationMs = 0L
+                lastObservedPosition = 0L
+                stalledPolls = 0
                 clipTransitioning = false
                 clipPreparedFile = null
                 nextLocked = false
@@ -974,7 +1103,7 @@ class AutoMixPlaybackManager(
 
     private fun ensureAnalysis() {
         if (!localAnalysisEnabled) return
-        if (!isStarted || analysisJob?.isActive == true) return
+        if (!isStarted || stemJob?.isActive == true || analysisJob?.isActive == true) return
         analysisJob = scope.launch {
             try {
                 val settings = settingsProvider.settingsState.value ?: return@launch

@@ -9,7 +9,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private const val CLIP_RENDER_VERSION = 2
+private const val CLIP_RENDER_VERSION = 3
 
 class StemTransitionRenderer(
     private val context: Context,
@@ -88,22 +88,14 @@ class StemTransitionRenderer(
             val t = frame.toFloat() / frames.toFloat()
             val currentVocals = DjFade.fadeOut(t, 0.25f, 0.45f)
             val nextVocals = DjFade.fadeIn(t, 0.55f, 0.75f)
-            val currentDrums = DjFade.equalPowerOut(t, 0.10f, 0.90f)
-            val nextDrums = DjFade.equalPowerIn(t, 0.10f, 0.90f)
-            val currentBass = DjFade.fadeOut(t, 0.30f, 0.50f)
-            val nextBass = DjFade.fadeIn(t, 0.50f, 0.70f)
-            val currentOther = DjFade.equalPowerOut(t, 0.20f, 0.85f)
-            val nextOther = DjFade.equalPowerIn(t, 0.20f, 0.85f)
+            val currentInstrumental = DjFade.equalPowerOut(t, 0.10f, 0.90f)
+            val nextInstrumental = DjFade.equalPowerIn(t, 0.10f, 0.90f)
             for (channel in 0..1) {
                 val index = frame * 2 + channel
                 var sample = 0f
-                sample += current.drums.getOrElse(index) { 0f } * currentDrums
-                sample += current.bass.getOrElse(index) { 0f } * currentBass
-                sample += current.other.getOrElse(index) { 0f } * currentOther
+                sample += current.instrumental.getOrElse(index) { 0f } * currentInstrumental
                 sample += current.vocals.getOrElse(index) { 0f } * currentVocals
-                sample += next.drums.getOrElse(index) { 0f } * nextDrums
-                sample += next.bass.getOrElse(index) { 0f } * nextBass
-                sample += next.other.getOrElse(index) { 0f } * nextOther
+                sample += next.instrumental.getOrElse(index) { 0f } * nextInstrumental
                 sample += next.vocals.getOrElse(index) { 0f } * nextVocals
                 result[index] = softClip(sample)
             }

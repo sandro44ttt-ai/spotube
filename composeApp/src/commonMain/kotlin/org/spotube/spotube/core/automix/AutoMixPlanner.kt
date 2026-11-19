@@ -153,6 +153,41 @@ object AutoMixPlanner {
         }
 
         if (level != null) {
+            val hotEntry = if (
+                level == AutoMixLevel.Bold &&
+                seed % 3 == 0 &&
+                vibeDistance <= 0.18f &&
+                energyDistance < 0.40f
+            ) {
+                hotEntryCue(nextDuration, nextFeatures, nextBarMs)
+            } else {
+                null
+            }
+            if (hotEntry != null) {
+                val cutCue = alignToBar(
+                    outgoingCue,
+                    currentDuration,
+                    currentFeatures,
+                    barMs * 8f,
+                    down = true
+                )
+                return TransitionPlan(
+                    kind = TransitionKind.HardCut,
+                    outgoingCueMs = cutCue,
+                    incomingCueMs = hotEntry,
+                    durationMs = 1_000L,
+                    tempoRatio = tempoRatio ?: 1f,
+                    pitchSemitones = pitchShift ?: 0,
+                    hardCut = true,
+                    bassSwap = false,
+                    bassOwnerIsA = true,
+                    headroomDb = -3f,
+                    bars = 0,
+                    level = AutoMixLevel.Bold,
+                    vibeDistance = vibeDistance,
+                    reason = "hot entry: drop/chorus ${hotEntry}ms after phrase cut $cutCue ms"
+                )
+            }
             val bars = when (level) {
                 AutoMixLevel.Safe -> 16
                 AutoMixLevel.Mid -> 16
@@ -393,6 +428,19 @@ object AutoMixPlanner {
         } else {
             (durationMs * 0.82f).toLong()
         }
+        return alignToBar(target, durationMs, features, barMs * 8f, down = true)
+    }
+
+    private fun hotEntryCue(
+        durationMs: Long,
+        features: AudioFeatures?,
+        barMs: Float
+    ): Long? {
+        if (durationMs < 45_000L || features?.analysisComplete != true) return null
+        val section = features.sections.firstOrNull {
+            it.type == SectionType.Drop || it.type == SectionType.Chorus
+        } ?: return null
+        val target = (durationMs * section.startFraction).toLong()
         return alignToBar(target, durationMs, features, barMs * 8f, down = true)
     }
 
