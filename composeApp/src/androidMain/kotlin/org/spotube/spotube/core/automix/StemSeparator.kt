@@ -369,7 +369,7 @@ class StemSeparator(
             var pcmFloat = false
             val chunks = ArrayList<FloatArray>(64)
             var collectedFrames = 0
-            var targetFrames = requestedFrames * sampleRate / SAMPLE_RATE + sampleRate
+            var targetFrames = (requestedFrames.toLong() * sampleRate / SAMPLE_RATE + sampleRate).toInt()
             while (!outputDone && collectedFrames < targetFrames) {
                 currentCoroutineContext()[Job]?.ensureActive()
                 if (!inputDone) {
@@ -397,7 +397,7 @@ class StemSeparator(
                             .coerceAtLeast(1)
                         sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                             .coerceAtLeast(8_000)
-                        targetFrames = requestedFrames * sampleRate / SAMPLE_RATE + sampleRate
+                        targetFrames = (requestedFrames.toLong() * sampleRate / SAMPLE_RATE + sampleRate).toInt()
                         pcmFloat = runCatching {
                             format.getInteger(MediaFormat.KEY_PCM_ENCODING)
                         }.getOrDefault(AudioFormat.ENCODING_PCM_16BIT) ==
