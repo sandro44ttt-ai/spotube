@@ -189,14 +189,16 @@ object AutoMixPlanner {
                 currentFeatures,
                 barMs,
                 sectionTypes,
-                minStartMs = currentPositionMs + 2_000L
+                minStartMs = currentPositionMs + 2_000L,
+                minVocalness = if (role == MashupRole.BInstrumentalAVocals) 0.35f else 0f
             )?.takeIf { currentDuration - it >= durationMs + 500L }
             val nextSection = sectionCue(
                 nextDuration,
                 nextFeatures,
                 nextBarMs,
                 setOf(SectionType.Chorus, SectionType.Drop, SectionType.Verse),
-                minStartMs = 0L
+                minStartMs = 0L,
+                minVocalness = if (role == MashupRole.AInstrumentalBVocals) 0.35f else 0f
             )
             val startCue = fitTransitionStart(
                 currentSection ?: outgoingCue,
@@ -430,12 +432,14 @@ object AutoMixPlanner {
         features: AudioFeatures?,
         barMs: Float,
         types: Set<SectionType>,
-        minStartMs: Long
+        minStartMs: Long,
+        minVocalness: Float
     ): Long? {
         if (durationMs < 45_000L || features?.analysisComplete != true) return null
         val section = features.sections
             .filter {
                 it.type in types &&
+                    it.vocalness >= minVocalness &&
                     it.endFraction > it.startFraction &&
                     (it.endFraction - it.startFraction) * durationMs >= barMs * 8f
             }
