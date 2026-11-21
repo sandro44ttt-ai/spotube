@@ -1123,9 +1123,8 @@ class AutoMixPlaybackManager(
                     progressiveOnly = true
                 )
                 val attemptedFull = mutableSetOf<String>()
-                val attemptedLight = mutableSetOf<String>()
                 while (isStarted) {
-                    val lookaheadEnd = min(queue.lastIndex, index + 2)
+                    val lookaheadEnd = min(queue.lastIndex, index + 1)
                     val fullCandidates = buildList {
                         current?.let { add(it) }
                         for (position in index + 1..lookaheadEnd) {
@@ -1136,24 +1135,9 @@ class AutoMixPlaybackManager(
                             it.id !in attemptedFull &&
                                 features[it.id]?.analysisComplete != true
                         }
-                    val lightCandidates = if (fullCandidates.isEmpty()) {
-                        queue.drop(index + 1).filter {
-                            it.id !in features &&
-                                it.id !in attemptedLight &&
-                                it.id !in attemptedFull
-                        }
-                    } else {
-                        emptyList()
-                    }
-                    val track = fullCandidates.firstOrNull()
-                        ?: lightCandidates.firstOrNull()
-                        ?: break
-                    val fullTrack = fullCandidates.isNotEmpty()
-                    if (fullTrack) {
-                        attemptedFull += track.id
-                    } else {
-                        attemptedLight += track.id
-                    }
+                    val track = fullCandidates.firstOrNull() ?: break
+                    val fullTrack = true
+                    attemptedFull += track.id
                     if (!isStarted) break
                     val info = streamingUrlRepository.resolveStreamInfo(
                         track = track,
@@ -1177,7 +1161,7 @@ class AutoMixPlaybackManager(
                     refineQueue()
                     scheduleStemAutoPrepare()
                     publish()
-                    delay(180)
+                    delay(500)
                 }
             } catch (e: CancellationException) {
                 throw e

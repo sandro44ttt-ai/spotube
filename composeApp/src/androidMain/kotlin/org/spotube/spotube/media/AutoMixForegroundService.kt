@@ -20,7 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.spotube.spotube.MainActivity
@@ -56,26 +56,34 @@ class AutoMixForegroundService : Service(), KoinComponent {
         }
     }
 
+    private data class Strings(
+        val title: String,
+        val text: String,
+        val play: String,
+        val pause: String
+    )
+
     private val manager: AutoMixPlaybackManager by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var observeJob: Job? = null
     private var mediaSession: MediaSessionCompat? = null
+    @Volatile private var strings: Strings? = null
 
     override fun onCreate() {
         super.onCreate()
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelName = runBlocking { getString(Res.string.auto_mix_title) }
-            notificationManager.createNotificationChannel(
-                NotificationChannel(
-                    CHANNEL_ID,
-                    channelName,
-                    NotificationManager.IMPORTANCE_LOW
-                ).apply {
-                    description = runBlocking { getString(Res.string.auto_mix_notification_text) }
-                    setShowBadge(false)
-                }
-            )
+        ensureChannel(strings)
+        scope.launch {
+            val loaded = runCatching {
+                Strings(
+                    title = getString(Res.string.auto_mix_title),
+                    text = getString(Res.string.auto_mix_notification_text),
+                    play = getString(Res.string.auto_mix_play),
+                    pause = getString(Res.string.auto_mix_pause)
+                )
+            }.getOrNull() ?: return@launch
+            strings = loaded
+            ensureChannel(loaded)
+            if (manager.state.value.isActive) updateNotification(manager.state.value)
         }
         mediaSession = MediaSessionCompat(this, "AutoMixSession").apply {
             setCallback(object : MediaSessionCompat.Callback() {
@@ -95,6 +103,21 @@ class AutoMixForegroundService : Service(), KoinComponent {
             })
             isActive = true
         }
+    }
+
+    private fun ensureChannel(labels: Strings?) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                labels?.title ?: "Auto Mix",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = labels?.text ?: "Auto Mix playback"
+                setShowBadge(false)
+            }
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -167,16 +190,16 @@ class AutoMixForegroundService : Service(), KoinComponent {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val title = state.current?.title
-            ?: runBlocking { getString(Res.string.auto_mix_title) }
+        val labels = strings
+        val title = state.current?.title ?: labels?.title ?: "Auto Mix"
         val artistText = state.current?.artists?.joinToString(", ") { it.name }
-            ?: runBlocking { getString(Res.string.auto_mix_notification_text) }
+            ?: labels?.text ?: "Auto Mix playback"
         val text = listOfNotNull(artistText, state.planLevel?.name?.uppercase())
             .joinToString(" - ")
-        val playPauseLabel = runBlocking {
-            getString(
-                if (state.isPlaying) Res.string.auto_mix_pause else Res.string.auto_mix_play
-            )
+        val playPauseLabel = if (state.isPlaying) {
+            labels?.pause ?: "Pause"
+        } else {
+            labels?.play ?: "Play"
         }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
