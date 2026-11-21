@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.roundToInt
@@ -305,6 +306,11 @@ class AudioFeatureAnalyzer(
         var centroidWeighted = 0.0
         var lowBandMagnitude = 0.0
         var highBandMagnitude = 0.0
+        var subMagnitude = 0.0
+        var bass808Magnitude = 0.0
+        var lowMidMagnitude = 0.0
+        var flatnessSum = 0.0
+        var flatnessFrames = 0
         var zeroCrossings = 0
         for (index in 1 until samples.size) {
             if ((samples[index - 1] < 0f) != (samples[index] < 0f)) zeroCrossings++
@@ -317,10 +323,16 @@ class AudioFeatureAnalyzer(
                 imag[index] = 0f
             }
             fft(real, imag)
+            var frameMagnitudeSum = 0.0
+            var frameLogMagnitudeSum = 0.0
+            var frameBins = 0
             for (bin in 1 until fftSize / 2) {
                 val magnitude = sqrt(
                     (real[bin] * real[bin] + imag[bin] * imag[bin]).toDouble()
                 ).toFloat()
+                frameMagnitudeSum += magnitude
+                frameLogMagnitudeSum += ln(magnitude.toDouble() + 1e-9)
+                frameBins += 1
                 val difference = magnitude - previousMagnitude[bin]
                 if (difference > 0f) flux[frame] += difference
                 previousMagnitude[bin] = magnitude
@@ -334,6 +346,9 @@ class AudioFeatureAnalyzer(
                 totalMagnitude += weighted
                 centroidWeighted += frequency * weighted
                 if (frequency < 250f) lowBandMagnitude += weighted
+                if (frequency in 20f..60f) subMagnitude += weighted
+                if (frequency in 40f..120f) bass808Magnitude += weighted
+                if (frequency in 120f..250f) lowMidMagnitude += weighted
                 if (frequency >= 4000f) highBandMagnitude += weighted
                 if (frequency in 300f..3000f) midBandMagnitude += magnitude
                 if (frequency in 80f..2000f) {
@@ -341,6 +356,12 @@ class AudioFeatureAnalyzer(
                     val pitchClass = ((midi.roundToInt() % 12) + 12) % 12
                     chroma[pitchClass] += magnitude.toDouble()
                 }
+            }
+            if (frameBins > 0 && frameMagnitudeSum > 1e-9) {
+                val arithmetic = frameMagnitudeSum / frameBins
+                val geometric = exp(frameLogMagnitudeSum / frameBins)
+                flatnessSum += (geometric / arithmetic).coerceIn(0.0, 1.0)
+                flatnessFrames += 1
             }
         }
 
@@ -584,6 +605,58 @@ class AudioFeatureAnalyzer(
         val danceability = (bpmConfidence * 0.45f +
             (if (bpm in 80f..150f) 0.25f else 0.1f) +
             density * 0.2f + energy * 0.1f).coerceIn(0f, 1f)
+        val subRatio = (subMagnitude / safeMagnitude).toFloat().coerceIn(0f, 1f)
+        val bass808Ratio = (bass808Magnitude / safeMagnitude).toFloat().coerceIn(0f, 1f)
+        val lowMidRatio = (lowMidMagnitude / safeMagnitude).toFloat().coerceIn(0f, 1f)
+        val bassTilt = ((bass808Magnitude + lowMidMagnitude) /
+            (midBandMagnitude + highBandMagnitude + 1e-9)).toFloat().coerceIn(0f, 1f)
+        val bassSaturation = (highBandMagnitude / (bass808Magnitude + lowMidMagnitude + 1e-9))
+            .toFloat().coerceIn(0f, 1f)
+        val kickDensity = (lowFlux.count { it > 0.8f } /
+            totalSeconds.coerceAtLeast(1f) / 4f).coerceIn(0f, 1f)
+        val snareDensity = (flux.indices.count { index ->
+            flux[index] > 0.8f && lowFlux[index] < 0.6f
+        } / totalSeconds.coerceAtLeast(1f) / 4f).coerceIn(0f, 1f)
+        val transientSharpness = ((flux.maxOrNull() ?: 0f) / 4f).coerceIn(0f, 1f)
+        val percussiveRatio = highRatio.coerceIn(0f, 1f)
+        val noise = (zcrRate / 0.15f).coerceIn(0f, 1f)
+        val onsetDensity = (onsetRate / 6f).coerceIn(0f, 1f)
+        val syncopation = ((earlyOffbeat + lateOffbeat) /
+            (bestPhaseScore + earlyOffbeat + lateOffbeat + 1e-6f)).coerceIn(0f, 1f)
+        val flatness = if (flatnessFrames > 0) {
+            (flatnessSum / flatnessFrames).toFloat().coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+        val spectralContrast = (abs(highRatio - lowRatio) /
+            (highRatio + lowRatio + 1e-6f)).coerceIn(0f, 1f)
+        val bassProfile = BassProfile(
+            subRatio = subRatio,
+            bass808Ratio = bass808Ratio,
+            lowMidRatio = lowMidRatio,
+            tilt = bassTilt,
+            saturation = bassSaturation
+        )
+        val drumProfile = DrumProfile(
+            kickDensity = kickDensity,
+            snareDensity = snareDensity,
+            transientSharpness = transientSharpness,
+            percussiveRatio = percussiveRatio,
+            noise = noise
+        )
+        val grooveProfile = GrooveProfile(
+            onsetDensity = onsetDensity,
+            swing = swingRatio,
+            syncopation = syncopation,
+            downbeat = downbeatConfidence
+        )
+        val timbreProfile = TimbreProfile(
+            brightness = brightness,
+            flatness = flatness,
+            contrast = spectralContrast,
+            warmth = warmth,
+            roughness = roughness
+        )
         val vibe = VibeProfile(
             brightness = brightness,
             density = density,
@@ -616,6 +689,10 @@ class AudioFeatureAnalyzer(
             transientOffsetMs = transientOffsetMs,
             downbeatConfidence = downbeatConfidence,
             vibe = vibe,
+            bassProfile = bassProfile,
+            drumProfile = drumProfile,
+            grooveProfile = grooveProfile,
+            timbreProfile = timbreProfile,
             sections = sections,
             analysisComplete = fullTrack
         )

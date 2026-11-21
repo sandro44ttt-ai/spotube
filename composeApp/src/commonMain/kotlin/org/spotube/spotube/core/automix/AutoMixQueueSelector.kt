@@ -77,14 +77,23 @@ object AutoMixQueueSelector {
         }
         if (directBpmDistance > 0.10f) score += 90f
         val harmonicDistance = keyDistance(currentKey, candidateKey)
-        score += harmonicDistance * 16f
-        if (harmonicDistance > 1) score += 350f
+        score += harmonicDistance * 70f
+        if (harmonicDistance == 1) score += 25f
+        if (harmonicDistance > 1) score += 600f
         score += abs(shift) * 10f
         val targetEnergy = (currentFeatures.energy + 0.04f).coerceIn(0.15f, 0.95f)
         score += abs(targetEnergy - candidateFeatures.energy) * 18f
         val vibeDistance = currentFeatures.vibe.distance(candidateFeatures.vibe)
         score += vibeDistance * 90f
         if (vibeDistance > 0.32f) score += 55f
+        val bassDistance = currentFeatures.bassProfile.distance(candidateFeatures.bassProfile)
+        val drumDistance = currentFeatures.drumProfile.distance(candidateFeatures.drumProfile)
+        val grooveDistance = currentFeatures.grooveProfile.distance(candidateFeatures.grooveProfile)
+        val timbreDistance = currentFeatures.timbreProfile.distance(candidateFeatures.timbreProfile)
+        score += bassDistance * 28f
+        score += drumDistance * 22f
+        score += grooveDistance * 18f
+        score += timbreDistance * 16f
         val swingDiff = abs(currentFeatures.swingRatio - candidateFeatures.swingRatio)
         if (swingDiff > 0.18f) score += 120f else score += swingDiff * 40f
         if (tempoRatio(currentFeatures.bpm, candidateFeatures.bpm) == null) score += 80f
