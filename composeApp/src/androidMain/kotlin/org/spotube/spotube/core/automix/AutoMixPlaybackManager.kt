@@ -134,6 +134,9 @@ class AutoMixPlaybackManager(
     private var stemAutoJob: Job? = null
     private var stemAutoPairKey: String? = null
     @Volatile private var stemInProgress = false
+    private var stemModelDownloadJob: Job? = null
+    @Volatile private var stemModelDownloadInProgress = false
+    private var stemModelDownloadAttempted = false
     private var nextLocked: Boolean = false
     private var stemPhase: StemPhase = StemPhase.Idle
     private var stemProgress: Float = 0f
@@ -282,6 +285,10 @@ class AutoMixPlaybackManager(
         clipTransitioning = false
         nextLocked = false
         stemInProgress = false
+        stemModelDownloadAttempted = false
+        stemModelDownloadJob?.cancel()
+        stemModelDownloadJob = null
+        stemModelDownloadInProgress = false
         stemAutoPairKey = null
         stemAutoJob?.cancel()
         stemAutoJob = null
@@ -330,6 +337,9 @@ class AutoMixPlaybackManager(
         loopJob?.cancel()
         stemJob?.cancel()
         stemJob = null
+        stemModelDownloadJob?.cancel()
+        stemModelDownloadJob = null
+        stemModelDownloadInProgress = false
         stemInProgress = false
         stemAutoJob?.cancel()
         stemAutoJob = null
@@ -379,7 +389,66 @@ class AutoMixPlaybackManager(
     }
 
     @Synchronized
+    fun ensureStemModels(force: Boolean = false) {
+        if (stemSeparator.modelReady()) {
+            if (isStarted && !stemInProgress) scheduleStemAutoPrepare()
+            return
+        }
+        if (stemModelDownloadInProgress || stemModelDownloadJob?.isActive == true) return
+        if (stemModelDownloadAttempted && !force) return
+        stemModelDownloadAttempted = true
+        stemModelDownloadInProgress = true
+        stemPhase = StemPhase.Downloading
+        stemProgress = 0f
+        publish()
+        Log.d("AutoMix", "stem model download start")
+        stemModelDownloadJob = scope.launch {
+            try {
+                val model = stemSeparator.ensureModel { progress ->
+                    stemProgress = progress
+                    _state.update {
+                        it.copy(stemPhase = StemPhase.Downloading, stemProgress = progress)
+                    }
+                }
+                if (model == null) {
+                    stemPhase = StemPhase.Error
+                    lastError = "stem model download failed"
+                    Log.w("AutoMix", "stem model download failed")
+                    publish()
+                    return@launch
+                }
+                Log.d("AutoMix", "stem models ready")
+                stemPhase = StemPhase.Idle
+                stemProgress = 0f
+                lastError = ""
+                publish()
+                scheduleStemAutoPrepare()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: OutOfMemoryError) {
+                stemPhase = StemPhase.Error
+                lastError = "stem model OOM"
+                Log.w("AutoMix", "stem model OOM", e)
+                publish()
+            } catch (e: Exception) {
+                stemPhase = StemPhase.Error
+                lastError = "stem model: ${e.message.orEmpty()}"
+                Log.w("AutoMix", "stem model download failed", e)
+                publish()
+            } finally {
+                stemModelDownloadJob = null
+                stemModelDownloadInProgress = false
+                publish()
+            }
+        }
+    }
+
+    @Synchronized
     fun prepareStems() {
+        if (!stemSeparator.modelReady()) {
+            ensureStemModels(force = true)
+            return
+        }
         if (stemInProgress || stemJob?.isActive == true) return
         val currentTrack = current ?: return
         val nextTrack = next ?: return
@@ -508,7 +577,10 @@ class AutoMixPlaybackManager(
     }
 
     private fun scheduleStemAutoPrepare() {
-        if (!stemSeparator.modelReady()) return
+        if (!stemSeparator.modelReady()) {
+            ensureStemModels()
+            return
+        }
         if (!isStarted || isTransitioning || stemInProgress || stemJob?.isActive == true || clipPreparedFile != null) {
             return
         }
