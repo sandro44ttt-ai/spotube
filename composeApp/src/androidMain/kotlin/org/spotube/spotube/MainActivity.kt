@@ -19,6 +19,7 @@ package org.spotube.spotube
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -35,13 +36,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         FileKit.init(this)
         NewPipeDownloader.init(Paths())
-        
-        // Plain start from the foreground; Media3 promotes PlaybackService itself once playback starts
-        startService(Intent(this, PlaybackService::class.java))
-        
+
         intent?.dataString?.let(ExternalUriHandler::onNewUri)
         setContent {
             App()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        runCatching {
+            startService(Intent(this, PlaybackService::class.java))
+        }.onFailure { error ->
+            Log.w("MainActivity", "Could not start PlaybackService", error)
         }
     }
 

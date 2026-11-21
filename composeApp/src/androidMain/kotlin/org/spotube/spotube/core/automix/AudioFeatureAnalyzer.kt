@@ -6,6 +6,7 @@ import android.util.Log
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.os.Process
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -47,6 +48,7 @@ class AudioFeatureAnalyzer(
         fullTrack: Boolean = true
     ): AudioFeatures? =
         withContext(Dispatchers.IO) {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
             memory[trackId]?.let { cached ->
                 if (!fullTrack || cached.analysisComplete) return@withContext cached
             }

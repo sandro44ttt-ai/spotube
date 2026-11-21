@@ -174,6 +174,8 @@ class AutoMixPlaybackManager(
                 if (activeIsA) {
                     lastError = "A${error.errorCode}: ${error.message.orEmpty()}"
                     recoverPlayback()
+                } else {
+                    resetIdleDeck(deckA)
                 }
             }
         })
@@ -183,6 +185,8 @@ class AutoMixPlaybackManager(
                 if (!activeIsA) {
                     lastError = "B${error.errorCode}: ${error.message.orEmpty()}"
                     recoverPlayback()
+                } else {
+                    resetIdleDeck(deckB)
                 }
             }
         })
@@ -206,9 +210,22 @@ class AutoMixPlaybackManager(
         runCatching { stemSeparator.closeSession() }
     }
 
+    private fun resetIdleDeck(deck: ExoPlayer) {
+        if (deck == activePlayer()) return
+        Log.w("AutoMix", "resetting idle deck after player error")
+        runCatching { deck.stop() }
+        runCatching { deck.clearMediaItems() }
+        nextLocked = false
+        stemAutoPairKey = null
+        clipPreparedFile = null
+        clipTransitioning = false
+        if (isStarted && !isTransitioning) preloadNext()
+    }
+
     private fun recoverPlayback() {
         if (recovering) return
         recovering = true
+        Log.w("AutoMix", "recovering active deck at position=$positionMs")
         try {
             transitionJob?.cancel()
             transitionJob = null
@@ -229,6 +246,7 @@ class AutoMixPlaybackManager(
             isPlaying = true
             lastObservedPosition = targetPosition
             stalledPolls = 0
+            Log.w("AutoMix", "recovered active deck at position=$targetPosition")
             ensureAnalysis()
         } finally {
             recovering = false
@@ -1095,7 +1113,7 @@ class AutoMixPlaybackManager(
 
     private fun ensureAnalysis() {
         if (!localAnalysisEnabled) return
-        if (!isStarted || stemInProgress || stemJob?.isActive == true || analysisJob?.isActive == true) return
+        if (!isStarted || isTransitioning || stemInProgress || stemJob?.isActive == true || analysisJob?.isActive == true) return
         analysisJob = scope.launch {
             try {
                 val settings = settingsProvider.settingsState.value ?: return@launch
