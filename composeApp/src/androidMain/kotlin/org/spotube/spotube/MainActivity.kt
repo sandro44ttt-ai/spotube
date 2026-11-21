@@ -31,6 +31,8 @@ import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.init
 
 class MainActivity : ComponentActivity() {
+    private var playbackServiceStartAttempted = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -43,11 +45,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
+    override fun onResume() {
+        super.onResume()
+        if (playbackServiceStartAttempted) return
+        playbackServiceStartAttempted = true
         runCatching {
             startService(Intent(this, PlaybackService::class.java))
         }.onFailure { error ->
+            playbackServiceStartAttempted = false
             Log.w("MainActivity", "Could not start PlaybackService", error)
         }
     }

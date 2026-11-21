@@ -590,11 +590,11 @@ class AutoMixPlaybackManager(
                         stalledPolls = 0
                         lastObservedPosition = positionMs
                     }
-                    if (stalledPolls >= 30) {
+                    if (stalledPolls >= 15) {
                         lastError = "playback stalled; stems cancelled"
                         stalledPolls = 0
                         recoverPlayback()
-                        delay(100)
+                        delay(200)
                         continue
                     }
                 } else {
@@ -615,7 +615,7 @@ class AutoMixPlaybackManager(
                     startTransition()
                 }
                 publish()
-                delay(100)
+                delay(200)
             }
         }
     }
@@ -1098,7 +1098,15 @@ class AutoMixPlaybackManager(
                     currentPitchSemitones = activePitchSemitones
                 )
                 "${track.title.take(18)} bpm=${f?.bpm?.roundToInt()} " +
-                    "key=${f?.key} full=${f?.analysisComplete} score=${pair.roundToInt()}"
+                    "key=${f?.key} full=${f?.analysisComplete} score=${pair.roundToInt()}" +
+                    if (f != null) {
+                        " bass=${(currentFeatures.bassProfile.distance(f.bassProfile) * 100).roundToInt()} " +
+                            "drum=${(currentFeatures.drumProfile.distance(f.drumProfile) * 100).roundToInt()} " +
+                            "groove=${(currentFeatures.grooveProfile.distance(f.grooveProfile) * 100).roundToInt()} " +
+                            "timbre=${(currentFeatures.timbreProfile.distance(f.timbreProfile) * 100).roundToInt()}"
+                    } else {
+                        ""
+                    }
             }
         )
         val newNext = queue.getOrNull(start)

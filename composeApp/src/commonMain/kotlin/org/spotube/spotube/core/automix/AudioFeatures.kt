@@ -62,7 +62,8 @@ data class BassProfile(
     val bass808Ratio: Float = 0f,
     val lowMidRatio: Float = 0f,
     val tilt: Float = 0f,
-    val saturation: Float = 0f
+    val saturation: Float = 0f,
+    val bassLevel: Float = 0f
 ) {
     fun distance(other: BassProfile): Float {
         var weighted = 0f
@@ -77,6 +78,7 @@ data class BassProfile(
         add(lowMidRatio, other.lowMidRatio, 1.0f)
         add(tilt, other.tilt, 0.8f)
         add(saturation, other.saturation, 0.7f)
+        add(bassLevel, other.bassLevel, 1.1f)
         return sqrt(weighted / weight.coerceAtLeast(1f)).coerceIn(0f, 1f)
     }
 }

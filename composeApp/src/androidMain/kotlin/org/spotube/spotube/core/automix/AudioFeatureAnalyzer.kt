@@ -605,22 +605,26 @@ class AudioFeatureAnalyzer(
         val danceability = (bpmConfidence * 0.45f +
             (if (bpm in 80f..150f) 0.25f else 0.1f) +
             density * 0.2f + energy * 0.1f).coerceIn(0f, 1f)
-        val subRatio = (subMagnitude / safeMagnitude).toFloat().coerceIn(0f, 1f)
-        val bass808Ratio = (bass808Magnitude / safeMagnitude).toFloat().coerceIn(0f, 1f)
-        val lowMidRatio = (lowMidMagnitude / safeMagnitude).toFloat().coerceIn(0f, 1f)
+        val lowTotal = (subMagnitude + bass808Magnitude + lowMidMagnitude).coerceAtLeast(1e-9)
+        val subRatio = (subMagnitude / lowTotal).toFloat().coerceIn(0f, 1f)
+        val bass808Ratio = (bass808Magnitude / lowTotal).toFloat().coerceIn(0f, 1f)
+        val lowMidRatio = (lowMidMagnitude / lowTotal).toFloat().coerceIn(0f, 1f)
+        val bassLevel = (lowTotal / safeMagnitude).toFloat().coerceIn(0f, 1f)
         val bassTilt = ((bass808Magnitude + lowMidMagnitude) /
             (midBandMagnitude + highBandMagnitude + 1e-9)).toFloat().coerceIn(0f, 1f)
         val bassSaturation = (highBandMagnitude / (bass808Magnitude + lowMidMagnitude + 1e-9))
             .toFloat().coerceIn(0f, 1f)
-        val kickDensity = (lowFlux.count { it > 0.8f } /
-            totalSeconds.coerceAtLeast(1f) / 4f).coerceIn(0f, 1f)
+        val onsetDenominator = onsetFrames.coerceAtLeast(1)
+        val kickDensity = (lowFlux.count { it > 1.0f }.toFloat() / onsetDenominator)
+            .coerceIn(0f, 1f)
         val snareDensity = (flux.indices.count { index ->
-            flux[index] > 0.8f && lowFlux[index] < 0.6f
-        } / totalSeconds.coerceAtLeast(1f) / 4f).coerceIn(0f, 1f)
-        val transientSharpness = ((flux.maxOrNull() ?: 0f) / 4f).coerceIn(0f, 1f)
+            flux[index] > 1.0f && lowFlux[index] < 0.8f
+        }.toFloat() / onsetDenominator).coerceIn(0f, 1f)
+        val transientSharpness = (((flux.maxOrNull() ?: 0f) - 1f) / 6f).coerceIn(0f, 1f)
         val percussiveRatio = highRatio.coerceIn(0f, 1f)
         val noise = (zcrRate / 0.15f).coerceIn(0f, 1f)
-        val onsetDensity = (onsetRate / 6f).coerceIn(0f, 1f)
+        val onsetDensity = (onsetFrames.toFloat() /
+            (totalSeconds.coerceAtLeast(1f) * (bpm / 60f) * 2f)).coerceIn(0f, 1f)
         val syncopation = ((earlyOffbeat + lateOffbeat) /
             (bestPhaseScore + earlyOffbeat + lateOffbeat + 1e-6f)).coerceIn(0f, 1f)
         val flatness = if (flatnessFrames > 0) {
@@ -635,7 +639,8 @@ class AudioFeatureAnalyzer(
             bass808Ratio = bass808Ratio,
             lowMidRatio = lowMidRatio,
             tilt = bassTilt,
-            saturation = bassSaturation
+            saturation = bassSaturation,
+            bassLevel = bassLevel
         )
         val drumProfile = DrumProfile(
             kickDensity = kickDensity,

@@ -134,7 +134,7 @@ class AutoMixForegroundService : Service(), KoinComponent {
                             state.current?.id,
                             state.isPlaying,
                             state.title,
-                            state.positionMs / 1_000L
+                            state.positionMs / 2_000L
                         )
                     }
                     .distinctUntilChanged()
